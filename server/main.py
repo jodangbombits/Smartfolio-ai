@@ -17,6 +17,7 @@ from psycopg2 import pool as pg_pool
 from fastapi import FastAPI, File, HTTPException, Request, UploadFile
 from fastapi.concurrency import run_in_threadpool
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 app = FastAPI()
@@ -55,6 +56,7 @@ VERIFIED_TTL_SECONDS = 15 * 60
 # Fallback lang kapag walang Supabase Storage (local testing)
 UPLOAD_DIR = "uploads"
 os.makedirs(UPLOAD_DIR, exist_ok=True)
+app.mount("/uploads", StaticFiles(directory=UPLOAD_DIR), name="uploads")
 
 
 # =====================================================================
