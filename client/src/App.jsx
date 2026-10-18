@@ -5,8 +5,7 @@ import StudentDTR from './StudentDTR';
 import Login from './Login';
 import { ShieldCheck, ExternalLink, Activity, Sparkles, TrendingUp, CheckCircle2 } from 'lucide-react';
 
-const API_BASE_URL = 'http://127.0.0.1:8000';
-
+const API_URL = import.meta.env.VITE_API_URL || "http://127.0.0.1:8000";
 // I-normalize ang user object galing login/localStorage.
 // - Laging "id" ang gagamitin (galing sa users table).
 // - Tinatanggal ang lumang "portfolio_id" na nagdudulot ng pagkakahalo ng mga account.

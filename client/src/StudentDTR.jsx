@@ -5,7 +5,7 @@ import {
 } from 'lucide-react';
 import toast, { Toaster } from 'react-hot-toast';
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000';
+const API_URL = import.meta.env.VITE_API_URL || "http://127.0.0.1:8000";
 
 export default function StudentDTR({ portfolioId = 1, studentInfo = null, onLogout, onSubmissionSuccess }) {
     const getTodayString = () => new Date().toISOString().split('T')[0];
