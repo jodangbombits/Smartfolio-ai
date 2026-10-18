@@ -13,6 +13,7 @@ from typing import Optional
 
 import psycopg2
 import psycopg2.extras
+from psycopg2 import pool as pg_pool
 from fastapi import FastAPI, File, HTTPException, Request, UploadFile
 from fastapi.concurrency import run_in_threadpool
 from fastapi.middleware.cors import CORSMiddleware
@@ -59,10 +60,67 @@ os.makedirs(UPLOAD_DIR, exist_ok=True)
 # =====================================================================
 # DATABASE
 # =====================================================================
+_pool = None
+
+
+class PooledConn:
+    """Parang normal na connection, pero ibinabalik sa pool ang close() imbes na isara."""
+
+    def __init__(self, conn):
+        self._c = conn
+
+    def cursor(self, *args, **kwargs):
+        return self._c.cursor(*args, **kwargs)
+
+    def commit(self):
+        self._c.commit()
+
+    def rollback(self):
+        self._c.rollback()
+
+    def close(self):
+        global _pool
+        try:
+            self._c.rollback()
+        except Exception:
+            pass
+        try:
+            _pool.putconn(self._c)
+        except Exception:
+            pass
+
+
 def get_conn():
+    """Nagre-reuse ng koneksyon para hindi mabagal ang bawat request."""
+    global _pool
     if not DATABASE_URL:
         raise RuntimeError("DATABASE_URL is not set")
-    return psycopg2.connect(DATABASE_URL)
+    if _pool is None:
+        _pool = pg_pool.ThreadedConnectionPool(
+            1,
+            8,
+            DATABASE_URL,
+            keepalives=1,
+            keepalives_idle=30,
+            keepalives_interval=10,
+            keepalives_count=3,
+        )
+    for _ in range(3):
+        c = _pool.getconn()
+        try:
+            if c.closed:
+                raise Exception("closed")
+            cur = c.cursor()
+            cur.execute("SELECT 1")
+            cur.close()
+            c.rollback()
+            return PooledConn(c)
+        except Exception:
+            try:
+                _pool.putconn(c, close=True)
+            except Exception:
+                pass
+    raise RuntimeError("Hindi makakonekta sa database")
 
 
 def init_db():
@@ -315,6 +373,38 @@ def get_messages_for_dtr(dtr_id: int):
             "timestamp": str(created) if created is not None else None,
         })
     return messages
+
+
+def get_messages_map(dtr_ids):
+    """Isang query lang para sa messages ng lahat ng DTR (imbes na isa kada DTR)."""
+    result = {i: [] for i in dtr_ids}
+    if not dtr_ids:
+        return result
+    conn = get_conn()
+    cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    cur.execute(
+        "SELECT id, dtr_id, sender_name, sender_role, message, created_at"
+        " FROM dtr_remarks WHERE dtr_id = ANY(%s) ORDER BY id ASC",
+        (list(dtr_ids),),
+    )
+    rows = cur.fetchall()
+    cur.close()
+    conn.close()
+    for r in rows:
+        sender_role = (r["sender_role"] or "").lower()
+        sender_type = "supervisor" if "supervisor" in sender_role else "student"
+        created = r["created_at"]
+        result.setdefault(r["dtr_id"], []).append({
+            "id": r["id"],
+            "dtr_id": r["dtr_id"],
+            "sender": sender_type,
+            "sender_name": r["sender_name"],
+            "sender_role": r["sender_role"],
+            "message": r["message"],
+            "text": r["message"],
+            "timestamp": str(created) if created is not None else None,
+        })
+    return result
 
 
 @app.get("/")
@@ -608,10 +698,11 @@ async def get_all_dtr_logs():
     cur.close()
     conn.close()
 
+    msg_map = get_messages_map([r["id"] for r in rows])
     logs = []
     for row in rows:
         dtr_item = dict(row)
-        dtr_item["messages"] = get_messages_for_dtr(dtr_item["id"])
+        dtr_item["messages"] = msg_map.get(dtr_item["id"], [])
         logs.append(dtr_item)
     return logs
 
@@ -627,10 +718,11 @@ async def get_dtr_logs(user_id: int):
     cur.close()
     conn.close()
 
+    msg_map = get_messages_map([r["id"] for r in rows])
     logs = []
     for row in rows:
         dtr_item = dict(row)
-        dtr_item["messages"] = get_messages_for_dtr(dtr_item["id"])
+        dtr_item["messages"] = msg_map.get(dtr_item["id"], [])
         logs.append(dtr_item)
     return logs
 
@@ -803,17 +895,35 @@ async def get_interns():
     cur.close()
 
     plain = conn.cursor()
+
+    saved_map = {}
+    plain.execute("SELECT user_id, data FROM intern_profiles")
+    for uid, raw in plain.fetchall():
+        try:
+            d = json.loads(raw)
+            if isinstance(d, dict):
+                saved_map[uid] = d
+        except ValueError:
+            pass
+
+    hours_map = {}
+    plain.execute(
+        "SELECT user_id, COALESCE(SUM(rendered_today), 0) FROM dtr_logs"
+        " WHERE LOWER(status) = 'approved' GROUP BY user_id"
+    )
+    for uid, hrs in plain.fetchall():
+        hours_map[uid] = float(hrs or 0)
+
     interns = []
     for s in students:
-        saved = load_saved_profile(plain, s["id"]) or {}
         profile = {}
-        profile.update(saved)
+        profile.update(saved_map.get(s["id"], {}))
         profile["internName"] = s["full_name"]
         profile["full_name"] = s["full_name"]
         profile["id"] = s["id"]
         profile["email"] = s["email"]
         profile["contact_number"] = s["contact_number"]
-        profile["approvedHours"] = get_approved_hours(plain, s["id"])
+        profile["approvedHours"] = hours_map.get(s["id"], 0)
         interns.append(profile)
 
     plain.close()
