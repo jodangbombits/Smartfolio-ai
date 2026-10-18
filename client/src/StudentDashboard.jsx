@@ -5,7 +5,7 @@ import {
     Download, Copy, Zap, CheckCircle2, Award, Wand2, LogOut, CalendarDays
 } from 'lucide-react';
 
-const API_BASE_URL = 'http://localhost:8000';
+const API_URL = import.meta.env.VITE_API_URL;
 const REQUIRED_HOURS = 500;
 
 /* ───────────── helpers ───────────── */

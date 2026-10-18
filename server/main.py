@@ -26,8 +26,8 @@ app.add_middleware(
 
 # --- BREVO EMAIL (HTTPS API) CONFIGURATION ---
 # >>> DALAWANG LINYA LANG ANG PALITAN MO DITO <<<
-BREVO_API_KEY = "YOUR_BREVO_API_KEY_HERE"
-SENDER_EMAIL = "jodangbombits@gmail.com"                 # 2) ang email na na-verify mo sa Brevo (Senders)
+BREVO_API_KEY = os.environ.get("BREVO_API_KEY", "")
+SENDER_EMAIL = os.environ.get("SENDER_EMAIL", "jodangbombits@gmail.com")
 SENDER_NAME = "SmartFolio OJT"
 
 # In-memory OTP storage for registration validation (email -> otp_code)
