@@ -31,7 +31,7 @@ import {
     Building2
 } from 'lucide-react';
 
-const API_URL = import.meta.env.VITE_API_URL;
+const API_BASE_URL = import.meta.env.VITE_API_URL || "http://127.0.0.1:8000";
 // Mga field na galing sa server / account; hindi dapat i-save sa profile JSON
 const SERVER_ONLY_FIELDS = ['id', 'email', 'contact_number', 'approvedHours', 'approved_hours', 'full_name', 'internName'];
 
