@@ -1,18 +1,21 @@
+import hashlib
+import hmac
 import json
 import os
 import random
-import shutil
-import urllib.request
+import re
+import secrets
+import time
 import urllib.error
+import urllib.request
 import uuid
-from typing import List, Optional
+from typing import Optional
 
 import psycopg2
 import psycopg2.extras
 from fastapi import FastAPI, File, HTTPException, Request, UploadFile
 from fastapi.concurrency import run_in_threadpool
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 app = FastAPI()
@@ -25,29 +28,195 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# --- BREVO EMAIL (HTTPS API) CONFIGURATION ---
+# =====================================================================
+# CONFIG (lahat galing sa Render Environment, walang secret sa code)
+# =====================================================================
 BREVO_API_KEY = os.environ.get("BREVO_API_KEY", "")
 SENDER_EMAIL = os.environ.get("SENDER_EMAIL", "jodangbombits@gmail.com")
 SENDER_NAME = "SmartFolio OJT"
 
-# --- DATABASE (Supabase Postgres) ---
 DATABASE_URL = os.environ.get("DATABASE_URL", "")
 
-# In-memory OTP storage for registration validation (email -> otp_code)
-otp_store = {}
+SUPABASE_URL = os.environ.get("SUPABASE_URL", "").rstrip("/")
+SUPABASE_SERVICE_KEY = os.environ.get("SUPABASE_SERVICE_KEY", "")
+SUPABASE_BUCKET = os.environ.get("SUPABASE_BUCKET", "proofs")
 
-# NOTE: nabubura pa rin ito sa Render free plan (ilipat sa Supabase Storage sa susunod)
+# Kapag naka-set, kailangan ito para gumawa ng Supervisor account
+SUPERVISOR_INVITE_CODE = os.environ.get("SUPERVISOR_INVITE_CODE", "")
+
+MAX_UPLOAD_BYTES = 15 * 1024 * 1024  # 15 MB
+
+# In-memory OTP storage (email -> otp_code) at verified emails (email -> timestamp)
+otp_store = {}
+verified_emails = {}
+VERIFIED_TTL_SECONDS = 15 * 60
+
+# Fallback lang kapag walang Supabase Storage (local testing)
 UPLOAD_DIR = "uploads"
 os.makedirs(UPLOAD_DIR, exist_ok=True)
-app.mount("/uploads", StaticFiles(directory=UPLOAD_DIR), name="uploads")
 
 
+# =====================================================================
+# DATABASE
+# =====================================================================
 def get_conn():
     if not DATABASE_URL:
         raise RuntimeError("DATABASE_URL is not set")
     return psycopg2.connect(DATABASE_URL)
 
 
+def init_db():
+    conn = get_conn()
+    cur = conn.cursor()
+
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS users (
+            id SERIAL PRIMARY KEY,
+            full_name TEXT NOT NULL,
+            email TEXT UNIQUE NOT NULL,
+            contact_number TEXT,
+            password TEXT NOT NULL,
+            role TEXT NOT NULL DEFAULT 'student'
+        )
+    """)
+
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS dtr_logs (
+            id SERIAL PRIMARY KEY,
+            user_id INTEGER NOT NULL REFERENCES users (id),
+            log_date TEXT NOT NULL,
+            time_in TEXT NOT NULL,
+            time_out TEXT NOT NULL,
+            rendered_today REAL NOT NULL,
+            raw_notes TEXT,
+            proof_url TEXT,
+            status TEXT DEFAULT 'pending',
+            rejection_reason TEXT DEFAULT ''
+        )
+    """)
+
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS dtr_remarks (
+            id SERIAL PRIMARY KEY,
+            dtr_id INTEGER NOT NULL REFERENCES dtr_logs (id),
+            sender_name TEXT NOT NULL,
+            sender_role TEXT NOT NULL,
+            message TEXT NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS intern_profiles (
+            user_id INTEGER PRIMARY KEY,
+            data TEXT NOT NULL,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+
+    # Isara ang public Data API ng Supabase sa mga table na ito.
+    # (Hindi apektado ang backend, kasi direct Postgres ang gamit niya.)
+    for table in ("users", "dtr_logs", "dtr_remarks", "intern_profiles"):
+        cur.execute(f"ALTER TABLE {table} ENABLE ROW LEVEL SECURITY")
+
+    conn.commit()
+    cur.close()
+    conn.close()
+
+
+init_db()
+
+
+# =====================================================================
+# PASSWORD HASHING (stdlib lang; tumatanggap pa rin ng lumang plain-text
+# at ina-upgrade ito sa hash pag-login)
+# =====================================================================
+def hash_password(password: str) -> str:
+    salt = secrets.token_hex(16)
+    dk = hashlib.pbkdf2_hmac(
+        "sha256", password.encode("utf-8"), bytes.fromhex(salt), 200_000
+    )
+    return f"pbkdf2${salt}${dk.hex()}"
+
+
+def verify_password(password: str, stored: str) -> bool:
+    if stored and stored.startswith("pbkdf2$"):
+        try:
+            _, salt, digest = stored.split("$")
+        except ValueError:
+            return False
+        dk = hashlib.pbkdf2_hmac(
+            "sha256", password.encode("utf-8"), bytes.fromhex(salt), 200_000
+        )
+        return hmac.compare_digest(dk.hex(), digest)
+    # lumang account na plain-text
+    return hmac.compare_digest(stored or "", password)
+
+
+# =====================================================================
+# SUPABASE STORAGE (permanenteng proof uploads)
+# =====================================================================
+def storage_enabled() -> bool:
+    return bool(SUPABASE_URL and SUPABASE_SERVICE_KEY)
+
+
+def ensure_bucket():
+    """Gagawa ng public bucket kung wala pa. Hindi magcra-crash ang app kapag nag-fail."""
+    if not storage_enabled():
+        print("Supabase Storage not configured; using local uploads (hindi permanente).")
+        return
+    body = json.dumps({
+        "id": SUPABASE_BUCKET,
+        "name": SUPABASE_BUCKET,
+        "public": True,
+    }).encode("utf-8")
+    req = urllib.request.Request(
+        f"{SUPABASE_URL}/storage/v1/bucket",
+        data=body,
+        method="POST",
+        headers={
+            "Authorization": f"Bearer {SUPABASE_SERVICE_KEY}",
+            "apikey": SUPABASE_SERVICE_KEY,
+            "Content-Type": "application/json",
+        },
+    )
+    try:
+        urllib.request.urlopen(req, timeout=15)
+        print(f"Created storage bucket '{SUPABASE_BUCKET}'")
+    except urllib.error.HTTPError as e:
+        # 400/409 = nandiyan na ang bucket, okay lang
+        print(f"Bucket check: HTTP {e.code} (ok kung existing na)")
+    except Exception as e:
+        print(f"Bucket check failed: {e}")
+
+
+ensure_bucket()
+
+
+def upload_to_supabase_sync(name: str, data: bytes, content_type: str) -> str:
+    url = f"{SUPABASE_URL}/storage/v1/object/{SUPABASE_BUCKET}/{name}"
+    req = urllib.request.Request(
+        url,
+        data=data,
+        method="POST",
+        headers={
+            "Authorization": f"Bearer {SUPABASE_SERVICE_KEY}",
+            "apikey": SUPABASE_SERVICE_KEY,
+            "Content-Type": content_type or "application/octet-stream",
+            "x-upsert": "true",
+        },
+    )
+    try:
+        urllib.request.urlopen(req, timeout=60)
+    except urllib.error.HTTPError as e:
+        detail = e.read().decode("utf-8", errors="ignore")
+        raise Exception(f"Storage {e.code}: {detail}")
+    return f"{SUPABASE_URL}/storage/v1/object/public/{SUPABASE_BUCKET}/{name}"
+
+
+# =====================================================================
+# EMAIL (Brevo)
+# =====================================================================
 def send_email_sync(to_email: str, subject: str, html: str):
     body = json.dumps({
         "sender": {"name": SENDER_NAME, "email": SENDER_EMAIL},
@@ -74,75 +243,16 @@ def send_email_sync(to_email: str, subject: str, html: str):
         raise Exception(f"Brevo {e.code}: {detail}")
 
 
-# --- DATABASE INITIALIZATION ---
-def init_db():
-    conn = get_conn()
-    cur = conn.cursor()
-
-    # 1. Users Table
-    cur.execute("""
-        CREATE TABLE IF NOT EXISTS users (
-            id SERIAL PRIMARY KEY,
-            full_name TEXT NOT NULL,
-            email TEXT UNIQUE NOT NULL,
-            contact_number TEXT,
-            password TEXT NOT NULL,
-            role TEXT NOT NULL DEFAULT 'student'
-        )
-    """)
-
-    # 2. DTR Logs Table
-    cur.execute("""
-        CREATE TABLE IF NOT EXISTS dtr_logs (
-            id SERIAL PRIMARY KEY,
-            user_id INTEGER NOT NULL REFERENCES users (id),
-            log_date TEXT NOT NULL,
-            time_in TEXT NOT NULL,
-            time_out TEXT NOT NULL,
-            rendered_today REAL NOT NULL,
-            raw_notes TEXT,
-            proof_url TEXT,
-            status TEXT DEFAULT 'pending',
-            rejection_reason TEXT DEFAULT ''
-        )
-    """)
-
-    # 3. DTR Remarks / Discussion Table
-    cur.execute("""
-        CREATE TABLE IF NOT EXISTS dtr_remarks (
-            id SERIAL PRIMARY KEY,
-            dtr_id INTEGER NOT NULL REFERENCES dtr_logs (id),
-            sender_name TEXT NOT NULL,
-            sender_role TEXT NOT NULL,
-            message TEXT NOT NULL,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )
-    """)
-
-    # 4. Intern Profiles Table (profile + MOA + requirements ng bawat student, naka-JSON)
-    cur.execute("""
-        CREATE TABLE IF NOT EXISTS intern_profiles (
-            user_id INTEGER PRIMARY KEY,
-            data TEXT NOT NULL,
-            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )
-    """)
-
-    conn.commit()
-    cur.close()
-    conn.close()
-
-
-init_db()
-
-
-# --- PYDANTIC SCHEMAS ---
+# =====================================================================
+# SCHEMAS
+# =====================================================================
 class RegisterSchema(BaseModel):
     full_name: str
     email: str
     contact_number: Optional[str] = ""
     password: str
     role: Optional[str] = "student"
+    invite_code: Optional[str] = ""
 
 
 class LoginSchema(BaseModel):
@@ -174,7 +284,9 @@ class OTPVerifySchema(BaseModel):
     code: str
 
 
-# HELPER FUNCTION: Fetch nested messages for a DTR entry
+# =====================================================================
+# HELPERS
+# =====================================================================
 def get_messages_for_dtr(dtr_id: int):
     conn = get_conn()
     cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
@@ -205,7 +317,14 @@ def get_messages_for_dtr(dtr_id: int):
     return messages
 
 
-# --- OTP: SEND (Brevo HTTPS API, real-time) ---
+@app.get("/")
+async def health():
+    return {"status": "ok", "service": "SmartFolio API"}
+
+
+# =====================================================================
+# OTP
+# =====================================================================
 @app.post("/api/send-otp")
 async def send_otp(payload: OTPRequestSchema):
     recipient_email = payload.email.strip()
@@ -243,17 +362,16 @@ async def send_otp(payload: OTPRequestSchema):
         print(f"Email Error: {str(e)}")
         msg = str(e)
         if "401" in msg or "Key not found" in msg:
-            msg = "Mali ang Brevo API key sa main.py"
+            msg = "Mali ang Brevo API key sa Render Environment"
         elif "sender" in msg.lower():
             msg = "Hindi pa verified ang SENDER_EMAIL sa Brevo (Senders & IP)"
         elif "timed out" in msg or "getaddrinfo" in msg:
-            msg = "Walang koneksyon (subukan ang ibang WiFi/hotspot)"
+            msg = "Walang koneksyon (subukan ulit)"
         raise HTTPException(
             status_code=500, detail=f"Failed to send email: {msg}"
         )
 
 
-# --- OTP: VERIFY ---
 @app.post("/api/verify-otp")
 async def verify_otp(payload: OTPVerifySchema):
     email_key = payload.email.strip().lower()
@@ -267,16 +385,41 @@ async def verify_otp(payload: OTPVerifySchema):
 
     if saved_code == payload.code.strip():
         del otp_store[email_key]
+        verified_emails[email_key] = time.time()
         return {"status": "success", "message": "Email verified successfully"}
-    else:
-        raise HTTPException(
-            status_code=400, detail="Mali ang Verification Code! Pakisuri ulit."
-        )
+    raise HTTPException(
+        status_code=400, detail="Mali ang Verification Code! Pakisuri ulit."
+    )
 
 
-# --- 1. REGISTER ENDPOINT ---
+# =====================================================================
+# AUTH
+# =====================================================================
 @app.post("/api/register")
 async def register_user(payload: RegisterSchema):
+    email = payload.email.strip().lower()
+    role = (payload.role or "student").lower()
+
+    if role not in ("student", "supervisor"):
+        raise HTTPException(status_code=400, detail="Invalid role")
+
+    # Kailangang na-verify muna ang email via OTP
+    verified_at = verified_emails.get(email)
+    if not verified_at or time.time() - verified_at > VERIFIED_TTL_SECONDS:
+        raise HTTPException(
+            status_code=400,
+            detail="Hindi pa na-verify ang email. Kumuha ng OTP at i-verify muna.",
+        )
+
+    # Supervisor invite code check
+    if role == "supervisor" and SUPERVISOR_INVITE_CODE:
+        if not hmac.compare_digest(
+            (payload.invite_code or "").strip(), SUPERVISOR_INVITE_CODE
+        ):
+            raise HTTPException(
+                status_code=403, detail="Mali ang Supervisor Invite Code."
+            )
+
     conn = get_conn()
     cur = conn.cursor()
     try:
@@ -285,14 +428,15 @@ async def register_user(payload: RegisterSchema):
             " VALUES (%s, %s, %s, %s, %s) RETURNING id",
             (
                 payload.full_name,
-                payload.email.strip().lower(),
+                email,
                 payload.contact_number,
-                payload.password,
-                payload.role.lower(),
+                hash_password(payload.password),
+                role,
             ),
         )
         user_id = cur.fetchone()[0]
         conn.commit()
+        verified_emails.pop(email, None)
         return {"message": "User registered successfully", "user_id": user_id}
     except psycopg2.errors.UniqueViolation:
         conn.rollback()
@@ -302,21 +446,31 @@ async def register_user(payload: RegisterSchema):
         conn.close()
 
 
-# --- 2. LOGIN ENDPOINT ---
 @app.post("/api/login")
 async def login_user(payload: LoginSchema):
     conn = get_conn()
     cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
     cur.execute(
-        "SELECT * FROM users WHERE LOWER(email) = %s AND password = %s",
-        (payload.email.strip().lower(), payload.password),
+        "SELECT * FROM users WHERE LOWER(email) = %s",
+        (payload.email.strip().lower(),),
     )
     user = cur.fetchone()
+
+    if not user or not verify_password(payload.password, user["password"]):
+        cur.close()
+        conn.close()
+        raise HTTPException(status_code=401, detail="Invalid email or password")
+
+    # I-upgrade ang lumang plain-text password sa hash
+    if not (user["password"] or "").startswith("pbkdf2$"):
+        cur.execute(
+            "UPDATE users SET password = %s WHERE id = %s",
+            (hash_password(payload.password), user["id"]),
+        )
+        conn.commit()
+
     cur.close()
     conn.close()
-
-    if not user:
-        raise HTTPException(status_code=401, detail="Invalid email or password")
 
     return {
         "message": "Login successful",
@@ -330,7 +484,6 @@ async def login_user(payload: LoginSchema):
     }
 
 
-# --- 3. GET ALL USERS ---
 @app.get("/api/users")
 async def get_all_users():
     conn = get_conn()
@@ -342,25 +495,45 @@ async def get_all_users():
     return users
 
 
-# --- 4. FILE UPLOAD ENDPOINT ---
+# =====================================================================
+# FILE UPLOAD (Supabase Storage = permanente)
+# =====================================================================
 @app.post("/api/upload")
 async def upload_file(file: UploadFile = File(...)):
     try:
         original_name = os.path.basename(file.filename or "file")
-        safe_name = f"{uuid.uuid4().hex[:8]}_{original_name}"
-        file_path = os.path.join(UPLOAD_DIR, safe_name)
-        with open(file_path, "wb") as buffer:
-            shutil.copyfileobj(file.file, buffer)
+        clean = re.sub(r"[^A-Za-z0-9._-]", "_", original_name)
+        safe_name = f"{uuid.uuid4().hex[:8]}_{clean}"
+
+        data = await file.read()
+        if len(data) > MAX_UPLOAD_BYTES:
+            raise HTTPException(
+                status_code=413, detail="Masyadong malaki ang file (max 15 MB)."
+            )
+
+        if storage_enabled():
+            public_url = await run_in_threadpool(
+                upload_to_supabase_sync, safe_name, data, file.content_type
+            )
+            return {"proof_url": public_url}
+
+        # Fallback (hindi permanente)
+        with open(os.path.join(UPLOAD_DIR, safe_name), "wb") as buffer:
+            buffer.write(data)
         return {"proof_url": f"/uploads/{safe_name}"}
+    except HTTPException:
+        raise
     except Exception as e:
+        print("Upload error:", str(e))
         raise HTTPException(status_code=500, detail=f"Upload failed: {str(e)}")
 
 
-# --- 5. DTR SUBMIT ---
+# =====================================================================
+# DTR
+# =====================================================================
 @app.post("/api/dtr/submit")
 async def submit_dtr(request: Request):
     payload = await request.json()
-    print("DTR Submission Payload:", payload)
 
     conn = get_conn()
     cur = conn.cursor()
@@ -421,7 +594,6 @@ async def submit_dtr(request: Request):
         conn.close()
 
 
-# --- 6. GET ALL DTR LOGS (Supervisor View with Messages Embedded) ---
 @app.get("/api/dtr/all")
 async def get_all_dtr_logs():
     conn = get_conn()
@@ -444,7 +616,6 @@ async def get_all_dtr_logs():
     return logs
 
 
-# --- 7. GET DTR LOGS BY USER (Student View with Messages Embedded) ---
 @app.get("/api/dtr/{user_id}")
 async def get_dtr_logs(user_id: int):
     conn = get_conn()
@@ -464,7 +635,6 @@ async def get_dtr_logs(user_id: int):
     return logs
 
 
-# --- 8. RESUBMIT DTR LOG ---
 @app.put("/api/dtr/{dtr_id}/resubmit")
 @app.put("/api/dtr/resubmit/{dtr_id}")
 @app.put("/api/dtr/{dtr_id}")
@@ -532,7 +702,6 @@ async def resubmit_dtr(dtr_id: int, request: Request):
         conn.close()
 
 
-# --- 9. STATUS UPDATE (Approve / Reject) ---
 @app.patch("/api/dtr/{log_id}/status")
 @app.put("/api/dtr/{log_id}/status")
 async def update_status(log_id: int, payload: StatusUpdateSchema):
@@ -552,14 +721,12 @@ async def update_status(log_id: int, payload: StatusUpdateSchema):
     return {"message": "Status updated in database"}
 
 
-# --- 10. GET REMARKS / MESSAGES ---
 @app.get("/api/dtr/{dtr_id}/remarks")
 @app.get("/api/dtr/{dtr_id}/messages")
 async def get_remarks(dtr_id: int):
     return get_messages_for_dtr(dtr_id)
 
 
-# --- 11. POST NEW REMARK / DISCUSSION MESSAGE ---
 @app.post("/api/dtr/{dtr_id}/remarks")
 @app.post("/api/dtr/{dtr_id}/messages")
 async def add_remark(dtr_id: int, payload: RemarkSchema):
@@ -588,7 +755,9 @@ async def add_remark(dtr_id: int, payload: RemarkSchema):
         conn.close()
 
 
-# --- 12. INTERN DIRECTORY (Intern Profile & MOA ng Supervisor) ---
+# =====================================================================
+# INTERN DIRECTORY
+# =====================================================================
 INTERN_SERVER_FIELDS = {
     "id",
     "portfolio_id",
