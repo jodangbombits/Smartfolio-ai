@@ -22,7 +22,8 @@ const statusOf = (l) => (l.status || 'pending').toLowerCase();
 
 const parseDate = (s) => { if (!s) return null; const [y, m, d] = String(s).slice(0, 10).split('-').map(Number); return (y && m && d) ? new Date(y, m - 1, d) : null; };
 const fmtDate = (s) => { const d = s instanceof Date ? s : parseDate(s); return d ? d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '—'; };
-const fullUrl = (u) => (u ? (u.startsWith('http') ? u : `${API_BASE_URL}${u}`) : null);
+const fullUrl = (u) =>
+    !u ? null : /^https?:\/\//i.test(u) ? u : `${API_BASE_URL}${u.startsWith('/') ? '' : '/'}${u}`;
 // Same MOA logic as the Supervisor Portal
 const getMoaState = (p, today) => {
     if (!p.moaSigned && !p.moaNumber && !p.moaFileUrl && !p.moaValidUntil) return { label: 'NOT RECORDED', cls: 'muted', note: 'Wala pang MOA na naitala ng Supervisor.' };
@@ -35,6 +36,28 @@ const getMoaState = (p, today) => {
     }
     return { label: 'ACTIVE', cls: 'ok', note: vu ? `Valid hanggang ${fmtDate(vu)}.` : 'Active.' };
 };
+
+const compressImage = (file, maxSize = 1600, quality = 0.8) =>
+    new Promise((resolve) => {
+        if (!file || !file.type.startsWith('image/')) return resolve(file);
+        const img = new Image();
+        const url = URL.createObjectURL(file);
+        img.onload = () => {
+            const scale = Math.min(1, maxSize / Math.max(img.width, img.height));
+            const canvas = document.createElement('canvas');
+            canvas.width = Math.round(img.width * scale);
+            canvas.height = Math.round(img.height * scale);
+            canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+            canvas.toBlob((blob) => {
+                URL.revokeObjectURL(url);
+                if (!blob || blob.size >= file.size) return resolve(file);
+                resolve(new File([blob], file.name.replace(/\.\w+$/, '') + '.jpg', { type: 'image/jpeg' }));
+            }, 'image/jpeg', quality);
+        };
+        img.onerror = () => { URL.revokeObjectURL(url); resolve(file); };
+        img.src = url;
+    });
+
 const REQS = [
     { key: 'moaSigned', label: 'MOA Signed' },
     { key: 'endorsementLetter', label: 'Endorsement Letter' },
@@ -340,10 +363,12 @@ export default function StudentDashboard({ studentName: studentNameProp = 'Stude
         try {
             let proofUrl = existingProofUrl;
             if (proofFile) {
-                const fd = new FormData(); fd.append('file', proofFile);
+                const fd = new FormData();
+                fd.append('file', await compressImage(proofFile));
                 const up = await fetch(`${API_BASE_URL}/api/upload`, { method: 'POST', body: fd });
-                if (up.ok) { const d = await up.json(); proofUrl = d.proof_url || d.url || ''; }
-                else console.warn('File upload failed, proceeding with text payload.');
+                if (!up.ok) { notify('Hindi na-upload ang proof. Subukan ulit.', true); return; }
+                const d = await up.json();
+                proofUrl = d.proof_url || d.url || '';
             }
             const payload = { user_id: Number(currentUserId), log_date: logDate, time_in: timeIn, time_out: timeOut, rendered_today: hours, raw_notes: accomplishment, proof_url: proofUrl };
             if (resubmitTargetLog) payload.dtr_id = idOf(resubmitTargetLog);
@@ -415,7 +440,7 @@ export default function StudentDashboard({ studentName: studentNameProp = 'Stude
                                 <td style={{ color: '#38bdf8', fontWeight: 700, whiteSpace: 'nowrap' }}>{hrsOf(l)} hrs</td>
                                 <td style={{ color: '#94a3b8', maxWidth: 260 }}>{l.accomplishment || l.raw_notes}</td>
                                 <td>{l.proof_url
-                                    ? <a className="btn sm" href={`${API_BASE_URL}${l.proof_url}`} target="_blank" rel="noreferrer"><Paperclip size={12} /> View Proof <Eye size={12} /></a>
+                                    ? <a className="btn sm" href={fullUrl(l.proof_url)} target="_blank" rel="noreferrer"><Paperclip size={12} /> View Proof <Eye size={12} /></a>
                                     : <span style={{ color: '#475569', fontStyle: 'italic' }}>No file</span>}</td>
                                 <td>{chip(l)}</td>
                                 <td><div className="act">
