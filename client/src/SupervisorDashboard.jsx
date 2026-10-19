@@ -1078,6 +1078,7 @@ export default function SupervisorDashboard({ supervisorName = 'Friessy Ferry', 
                                                 const isRejected = st === 'rejected';
                                                 const fullUrl = (u) =>
                                                     !u ? null : /^https?:\/\//i.test(u) ? u : `${API_BASE_URL}${u.startsWith('/') ? '' : '/'}${u}`;
+                                                const proof = fullUrl(log.proof_url || log.proofUrl);
                                                 const msgCount = log.messages ? log.messages.length : 0;
                                                 const waiting = needsReply(log);
 
