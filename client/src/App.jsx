@@ -4,8 +4,9 @@ import SupervisorDashboard from './SupervisorDashboard';
 import StudentDTR from './StudentDTR';
 import Login from './Login';
 import { ShieldCheck, ExternalLink, Activity, Sparkles, TrendingUp, CheckCircle2 } from 'lucide-react';
-
+import { GoogleOAuthProvider } from '@react-oauth/google';
 const API_URL = import.meta.env.VITE_API_URL || "http://127.0.0.1:8000";
+const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID || "";
 // I-normalize ang user object galing login/localStorage.
 // - Laging "id" ang gagamitin (galing sa users table).
 // - Tinatanggal ang lumang "portfolio_id" na nagdudulot ng pagkakahalo ng mga account.
@@ -18,16 +19,92 @@ const normalizeUser = (u) => {
 };
 
 export default function App() {
-    // Kumuha ng saved session sa localStorage kapag nag-load ang app
-    const [user, setUser] = useState(() => {
-        try {
-            const savedUser = localStorage.getItem('smartfolio_user');
-            return savedUser ? normalizeUser(JSON.parse(savedUser)) : null;
-        } catch (e) {
-            localStorage.removeItem('smartfolio_user');
-            return null;
-        }
-    });
+    // ... Lahat ng iyong umiiral na useState, useEffect, at handlers (WALANG BAGUHIN) ...
+
+    return (
+        <GoogleOAuthProvider clientId={GOOGLE_CLIENT_ID}>
+            {/* 1. Unauthenticated View -> Login Screen */}
+            {!user && <Login onLogin={handleLogin} />}
+
+            {/* 2. Role-Based Navigation: SUPERVISOR / EMPLOYEE */}
+            {user && isSupervisor && (
+                <SupervisorDashboard
+                    supervisorName={user.name || user.full_name || user.username || 'Supervisor'}
+                    onLogout={handleLogout}
+                />
+            )}
+
+            {/* 3. Role-Based Navigation: STUDENT */}
+            {user && !isSupervisor && normalizedRole === 'student' && (
+                <div style={{ background: '#070a11', minHeight: '100vh' }}>
+                    {!userId ? (
+                        <div style={{ padding: '2rem', textAlign: 'center', color: '#fff', background: '#0f172a', minHeight: '100vh' }}>
+                            <h2>Walang user ID ang session mo</h2>
+                            <p style={{ color: '#94a3b8' }}>Paki-login ulit para ma-load ang sarili mong DTR.</p>
+                            <button
+                                onClick={handleLogout}
+                                style={{ background: '#ef4444', color: '#fff', border: 'none', padding: '0.5rem 1rem', borderRadius: '6px', cursor: 'pointer', marginTop: '1rem' }}
+                            >
+                                Back to Login
+                            </button>
+                        </div>
+                    ) : (
+                        <>
+                            {currentView === 'dtr' && (
+                                <StudentDTR
+                                    user={user}
+                                    portfolioId={userId}
+                                    onLogout={handleLogout}
+                                    onSubmitSuccess={() => {
+                                        fetchDtrLogs();
+                                        setCurrentView('dashboard');
+                                    }}
+                                    onBack={() => {
+                                        fetchDtrLogs();
+                                        setCurrentView('dashboard');
+                                    }}
+                                />
+                            )}
+
+                            {currentView === 'dashboard' && (
+                                <StudentDashboard
+                                    renderedHours={renderedHours}
+                                    dtrLogs={dtrLogs}
+                                    studentInfo={user}
+                                    currentView={currentView}
+                                    onNavigate={(view) => setCurrentView(view)}
+                                    onNavigateToDTR={() => setCurrentView('dtr')}
+                                    onLogout={handleLogout}
+                                />
+                            )}
+
+                            {currentView === 'ai' && (
+                                /* Inilagay mo na AI Assistant View d'ito */
+                                <div style={{ padding: '2rem', color: '#e2e8f0', fontFamily: "'Inter', sans-serif" }}>
+                                    {/* ... existing AI UI content ... */}
+                                </div>
+                            )}
+                        </>
+                    )}
+                </div>
+            )}
+
+            {/* Fallback View kung may hindi tumugmang role */}
+            {user && !isSupervisor && normalizedRole !== 'student' && (
+                <div style={{ padding: '2rem', textAlign: 'center', color: '#fff', background: '#0f172a', minHeight: '100vh' }}>
+                    <h2>Unknown User Role: "{user.role || user.user_type}"</h2>
+                    <p style={{ color: '#94a3b8' }}>Mali ang role na pumasok mula sa backend database. Paki-check ang user object.</p>
+                    <button
+                        onClick={handleLogout}
+                        style={{ background: '#ef4444', color: '#fff', border: 'none', padding: '0.5rem 1rem', borderRadius: '6px', cursor: 'pointer', marginTop: '1rem' }}
+                    >
+                        Back to Login
+                    </button>
+                </div>
+            )}
+        </GoogleOAuthProvider>
+    );
+}
 
     const [currentView, setCurrentView] = useState('dashboard'); // 'dashboard', 'dtr', or 'ai'
     const [dtrLogs, setDtrLogs] = useState([]);
@@ -370,4 +447,4 @@ export default function App() {
             </button>
         </div>
     );
-}
+
