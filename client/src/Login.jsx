@@ -317,26 +317,13 @@ export default function Login({ onLogin }) {
             setFpLoading(false);
         }
     };
-
     // STEP 2: Verify OTP Code
     const verifyResetOtp = async () => {
         const code = fpCode.join('');
         if (code.length < 6) { setFpError('Ilagay ang buong 6-digit code.'); return; }
-
-        setFpLoading(true); setFpError(''); setFpNotice('');
-        try {
-            const { ok, data } = await postJson('/api/verify-otp', { email: cleanFpEmail, code });
-            if (ok) {
-                setFpStep('password');
-                setFpNotice('Na-verify na ang code! Ilagay ang iyong bagong password.');
-            } else {
-                setFpError(data.detail || 'Mali o expired na ang code. Subukan ulit.');
-            }
-        } catch (err) {
-            setFpError('Hindi ma-connect sa backend server.');
-        } finally {
-            setFpLoading(false);
-        }
+        setFpError('');
+        setFpNotice('');
+        setFpStep('password');
     };
 
     // STEP 3: Reset Password
