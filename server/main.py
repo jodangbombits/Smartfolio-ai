@@ -140,7 +140,7 @@ export default function Login({ onLogin }) {
         return () => { cancelled = true; if (script) script.removeEventListener('load', init); };
     }, [forgotMode, isRegister]);
 
-    /* ───────── Captcha ───────── */
+   # Captcha
     const handleToggleCaptcha = () => {
         if (isCaptchaChecked) { setIsCaptchaChecked(false); return; }
         setIsCaptchaLoading(true);
