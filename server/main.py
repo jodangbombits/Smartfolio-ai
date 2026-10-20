@@ -89,7 +89,7 @@ export default function Login({ onLogin }) {
     const [confirmPassword, setConfirmPassword] = useState('');
     const [showNew, setShowNew] = useState(false);
 
-    /* ───────── Google Sign-In ───────── */
+    # Google Sign-In
     const googleBtnRef = useRef(null);
     const onLoginRef = useRef(onLogin);
     onLoginRef.current = onLogin;
