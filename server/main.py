@@ -170,6 +170,8 @@ async def send_otp(payload: OTPRequestSchema):
     generated_otp = str(random.randint(100000, 999999))
     otp_store[recipient_email] = generated_otp
 
+    print(f"=== OTP FOR {recipient_email}: {generated_otp} ===")
+
     html = f"<h2>SmartFolio OTP: {generated_otp}</h2>"
     try:
         await run_in_threadpool(send_email_sync, recipient_email, f"{generated_otp} is your verification code", html)
@@ -297,14 +299,42 @@ async def google_login(payload: GoogleLoginSchema):
 
 @app.post("/api/forgot-password")
 async def forgot_password(payload: ForgotSchema):
+    email = payload.email.strip().lower()
+    if not email:
+        raise HTTPException(status_code=400, detail="Email is required")
+
     code = ''.join(random.choices(string.digits, k=6))
-    otp_store[payload.email.lower()] = code
-    return {"status": "success", "message": f"Reset code sent to {payload.email}", "code": code}
+    otp_store[email] = code
+
+    # Lalabas ang linyang ito sa Render logs para madaling makuha ang OTP
+    print(f"=== RESET CODE FOR {email}: {code} ===")
+
+    html = f"""
+    <div style="font-family: Arial, sans-serif; padding: 20px;">
+      <h2>SmartFolio Password Reset</h2>
+      <p>Ang iyong password reset code ay: <b>{code}</b></p>
+      <p>Valid ito sa loob ng 10 minuto.</p>
+    </div>
+    """
+
+    if BREVO_API_KEY:
+        try:
+            await run_in_threadpool(send_email_sync, email, f"{code} is your SmartFolio reset code", html)
+            print(f"Successfully sent email to {email} via Brevo")
+        except Exception as e:
+            print(f"Failed to send email via Brevo: {e}")
+
+    return {
+        "status": "success",
+        "message": f"Reset code sent to {email}",
+        "code": code
+    }
 
 
 @app.post("/api/reset-password")
 async def reset_password(payload: ResetSchema):
-    stored_code = otp_store.get(payload.email.lower())
+    email = payload.email.strip().lower()
+    stored_code = otp_store.get(email)
     if not stored_code or stored_code != payload.code.strip():
         raise HTTPException(status_code=400, detail="Mali o expired ang reset code!")
 
@@ -312,8 +342,102 @@ async def reset_password(payload: ResetSchema):
         raise HTTPException(status_code=500, detail="Database client not configured")
 
     try:
-        supabase.table("users").update({"password": payload.new_password}).eq("email", payload.email.lower()).execute()
-        del otp_store[payload.email.lower()]
+        supabase.table("users").update({"password": payload.new_password}).eq("email", email).execute()
+        del otp_store[email]
         return {"status": "success", "message": "Password reset successfully"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/users")
+async def get_all_users():
+    if not supabase:
+        raise HTTPException(status_code=500, detail="Database client not configured")
+    try:
+        res = supabase.table("users").select("id, full_name, email, contact_number, role").execute()
+        return res.data or []
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# =====================================================================
+# DTR ENDPOINTS
+# =====================================================================
+@app.post("/api/dtr/submit")
+async def submit_dtr(request: Request):
+    payload = await request.json()
+    if not supabase:
+        raise HTTPException(status_code=500, detail="Database client not configured")
+
+    user_id = payload.get("user_id") or payload.get("userId")
+    if not user_id:
+        raise HTTPException(status_code=400, detail="Missing user_id")
+
+    log_date = str(payload.get("log_date") or payload.get("date") or "")
+    time_in = str(payload.get("time_in") or payload.get("timeIn") or "")
+    time_out = str(payload.get("time_out") or payload.get("timeOut") or "")
+    raw_notes = str(payload.get("raw_notes") or payload.get("notes") or payload.get("accomplishments") or "")
+    proof_url = str(payload.get("proof_url") or payload.get("proofUrl") or payload.get("proof") or "")
+    
+    raw_hours = payload.get("rendered_today") or payload.get("renderedHours") or payload.get("hoursRendered") or 8.0
+    try:
+        rendered_today = float(raw_hours)
+    except (ValueError, TypeError):
+        rendered_today = 8.0
+
+    new_log = {
+        "user_id": user_id,
+        "log_date": log_date,
+        "time_in": time_in,
+        "time_out": time_out,
+        "rendered_today": rendered_today,
+        "raw_notes": raw_notes,
+        "proof_url": proof_url,
+        "status": "pending",
+    }
+    try:
+        res = supabase.table("dtr_logs").insert(new_log).execute()
+        return {"message": "DTR saved successfully", "data": res.data}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/dtr/all")
+async def get_all_dtr_logs():
+    if not supabase:
+        raise HTTPException(status_code=500, detail="Database client not configured")
+    try:
+        res = supabase.table("dtr_logs").select("*, users(full_name)").order("id", desc=True).execute()
+        logs = []
+        for r in res.data or []:
+            student_name = r.get("users", {}).get("full_name") if isinstance(r.get("users"), dict) else None
+            r["student_name"] = student_name or "Unknown Student"
+            logs.append(r)
+        return logs
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/dtr/{user_id}")
+async def get_dtr_logs(user_id: int):
+    if not supabase:
+        raise HTTPException(status_code=500, detail="Database client not configured")
+    try:
+        res = supabase.table("dtr_logs").select("*").eq("user_id", user_id).order("id", desc=True).execute()
+        return res.data or []
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# =====================================================================
+# INTERN PROFILES ENDPOINTS
+# =====================================================================
+@app.get("/api/interns")
+async def get_interns():
+    if not supabase:
+        raise HTTPException(status_code=500, detail="Database client not configured")
+    try:
+        res = supabase.table("users").select("id, full_name, email, contact_number").eq("role", "student").execute()
+        return res.data or []
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
