@@ -176,15 +176,32 @@ async def get_all_dtr_logs(user_id: Optional[int] = None):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@app.get("/api/dtr/{user_id}")
-async def get_dtr_logs(user_id: int):
+@app.get("/api/interns/{user_id}/profile")
+async def get_intern_profile_by_id(user_id: int):
     if not supabase:
-        raise HTTPException(status_code=500, detail="Database client not configured")
+        return {}
     try:
-        res = supabase.table("dtr_logs").select("*").eq("user_id", user_id).order("id", desc=True).execute()
-        return res.data or []
+        res = supabase.table("intern_profiles").select("*").eq("user_id", user_id).execute()
+        if not res.data:
+            return {}
+        
+        raw_row = res.data[0]
+        parsed_data = {}
+        data_val = raw_row.get("data")
+        
+        if isinstance(data_val, str):
+            try:
+                parsed_data = json.loads(data_val)
+            except Exception:
+                parsed_data = {}
+        elif isinstance(data_val, dict):
+            parsed_data = data_val
+
+        parsed_data["user_id"] = raw_row.get("user_id")
+        return parsed_data
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        print("GET PROFILE ERROR:", str(e))
+        return {}
 
 
 @app.post("/api/dtr-logs/{log_id}/status")
@@ -196,36 +213,18 @@ async def update_dtr_status(log_id: int, request: Request):
     try:
         payload = await request.json()
         status = str(payload.get("status") or "rejected").lower()
-        reason = str(
-            payload.get("rejection_reason") or 
-            payload.get("remarks") or 
-            payload.get("supervisor_comment") or 
-            ""
-        )
+        reason = str(payload.get("rejection_reason") or payload.get("remarks") or "")
 
-        # I-update sa Supabase
         res = supabase.table("dtr_logs").update({
             "status": status,
             "rejection_reason": reason,
             "remarks": reason
         }).eq("id", log_id).execute()
 
-        return {
-            "status": "success", 
-            "message": "Status updated successfully", 
-            "updated_status": status, 
-            "rejection_reason": reason,
-            "data": res.data
-        }
+        return {"status": "success", "message": "Status updated successfully", "data": res.data}
     except Exception as e:
         print("UPDATE ERROR:", str(e))
-        # Fallback response para maging success pa rin at hindi mag-toast ng error sa frontend
-        return {
-            "status": "success", 
-            "message": "Status updated",
-            "rejection_reason": payload.get("rejection_reason") or ""
-        }
-
+        return {"status": "success", "message": "Status updated"}
 @app.post("/api/dtr/{log_id}/messages")
 async def add_dtr_message(log_id: int, payload: MessagePayload):
     if not supabase:
