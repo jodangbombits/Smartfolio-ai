@@ -486,8 +486,27 @@ async def get_dtr_logs(user_id: int):
     if not supabase:
         raise HTTPException(status_code=500, detail="Database client not configured")
     try:
+        # Kunin ang logs ng student
         res = supabase.table("dtr_logs").select("*").eq("user_id", user_id).order("id", desc=True).execute()
-        return res.data or []
+        logs = res.data or []
+
+        # Isama ang pinakabagong remark mula sa dtr_remarks table para sa bawat log
+        for log in logs:
+            log_id = log.get("id")
+            if log_id:
+                try:
+                    remarks_res = supabase.table("dtr_remarks").select("*").eq("dtr_id", log_id).order("id", desc=True).limit(1).execute()
+                    if remarks_res.data and len(remarks_res.data) > 0:
+                        latest_remark = remarks_res.data[0].get("message", "")
+                        # Linisin ang prefix kung may 'REJECTED:'
+                        clean_remark = latest_remark.replace("REJECTED:", "").strip()
+                        log["remarks"] = clean_remark
+                        if not log.get("rejection_reason"):
+                            log["rejection_reason"] = clean_remark
+                except Exception as r_err:
+                    print("Error fetching remarks for log:", log_id, str(r_err))
+
+        return logs
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
