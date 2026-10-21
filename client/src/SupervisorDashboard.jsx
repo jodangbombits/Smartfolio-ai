@@ -16,8 +16,16 @@ const statusOf = (l) => (l.status || 'pending').toLowerCase();
 const dateOf = (l) => l.log_date || l.date || '';
 const msgText = (m) => typeof m === 'string' ? m : (m.message || m.text || m.remark || m.content || '');
 const fullUrl = (u) => !u ? null : /^https?:\/\//i.test(u) ? u : `${API}${u.startsWith('/') ? '' : '/'}${u}`;
-const isSup = (m) => m && m.sender === 'supervisor';
-const needsReply = (l) => l.messages?.length > 0 && !isSup(l.messages[l.messages.length - 1]);
+const isSup = (m) => {
+    if (!m) return false;
+    const role = String(m.sender_role || m.sender_name || m.sender || '').toLowerCase();
+    return role === 'supervisor';
+    const needsReply = (l) => {
+        if (!l || !Array.isArray(l.messages) || l.messages.length === 0) return false;
+        const lastMsg = l.messages[l.messages.length - 1];
+        // Naghihintay ng reply kapag HINDI galing sa supervisor ang huling message
+        return !isSup(lastMsg);
+    };
 const keyOf = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 const parseLocal = (s) => { const [y, m, d] = String(s).slice(0, 10).split('-').map(Number); return (y && m && d) ? new Date(y, m - 1, d) : null; };
 const weekStartKey = (s) => { const d = parseLocal(s) || new Date(); d.setDate(d.getDate() - ((d.getDay() + 6) % 7)); return keyOf(d); };
