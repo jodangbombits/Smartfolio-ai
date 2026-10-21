@@ -14,7 +14,7 @@ const statusOf = (l) => (l.status || 'pending').toLowerCase();
 const msgText = (m) => m.message || m.text || m.remark || m.content || '';
 const fullUrl = (u) => !u ? null : /^https?:\/\//i.test(u) ? u : `${API_BASE_URL}${u.startsWith('/') ? '' : '/'}${u}`;
 
-/* ───────────── Original Cyberpunk Styles ───────────── */
+/* ───────────── Original Exact Cyberpunk Styles ───────────── */
 const CSS = `
 @import url('https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap');
 .sf{--cy:#22d3ee;--vi:#a78bfa;--ok:#34d399;--warn:#facc15;--bad:#f87171;--mut:#64748b;--line:rgba(34,211,238,.3);
@@ -56,7 +56,7 @@ const CSS = `
 .btn.ok{color:var(--ok);border-color:rgba(52,211,153,.4);background:rgba(52,211,153,.1)}
 .btn.bad{color:var(--bad);border-color:rgba(248,113,113,.45);background:rgba(239,68,68,.12)}
 .btn.sm{padding:5px 10px;font-size:10.5px}
-.pill{padding:5px 12px;border-radius:99px;border:1px solid var(--line);background:none;color:#94a3b8;font-size:10.5px;cursor:pointer}
+.pill{padding:5px 12px;border-radius:99px;border:1px solid var(--line);background:none;color:#94a3b8;font-size:10.5px;cursor:pointer;letter-spacing:.06em;text-transform:uppercase}
 .pill.on{color:var(--cy);background:rgba(34,211,238,.14);box-shadow:0 0 12px rgba(34,211,238,.25)}
 .chip{display:inline-block;padding:3px 10px;border-radius:6px;font-size:10px;font-weight:700;letter-spacing:.08em;border:1px solid}
 .chip.ok{color:var(--ok);background:rgba(52,211,153,.1);border-color:rgba(52,211,153,.5)}
@@ -67,8 +67,8 @@ const CSS = `
 .tbl{width:100%;border-collapse:collapse;text-align:left}
 .tbl th{padding:10px 12px;font-size:10px;color:var(--mut);border-bottom:1px solid rgba(34,211,238,.18);letter-spacing:.14em;text-transform:uppercase}
 .tbl td{padding:12px;border-bottom:1px solid rgba(255,255,255,.05);vertical-align:middle}
+.tbl tr:hover td{background:rgba(34,211,238,.04)}
 .act{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
-.cnt{background:#38bdf8;color:#082f49;border-radius:99px;padding:0 6px;font-size:10px;font-weight:800}
 .in{width:100%;background:rgba(15,23,42,.8);border:1px solid var(--line);border-radius:9px;padding:9px 10px;color:#fff;font:inherit;outline:0;color-scheme:dark}
 .toast{position:fixed;right:20px;bottom:20px;z-index:400;padding:12px 16px;border-radius:10px;background:#0a1020;border:1px solid var(--ok);color:var(--ok);box-shadow:0 0 24px rgba(52,211,153,.3)}
 .toast.err{border-color:var(--bad);color:var(--bad);box-shadow:0 0 24px rgba(248,113,113,.3)}
@@ -78,14 +78,6 @@ const CSS = `
 .bub.me{background:#0e7490;border-radius:14px 14px 3px 14px}
 .bub.sup{background:rgba(239,68,68,.16);border:1px solid rgba(239,68,68,.35);border-radius:14px 14px 14px 3px}
 `;
-
-const NAV = [
-    { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
-    { id: 'interns', label: 'All Interns', icon: Users },
-    { id: 'dtr', label: 'DTR Approval Center', icon: FileText },
-    { id: 'messages', label: 'Messages', icon: MessageSquare },
-    { id: 'profile', label: 'Intern Profile & MOA', icon: UserCheck }
-];
 
 export default function SupervisorDashboard({ supervisorName = "Jodilyn P. Bombita", onLogout }) {
     const [tab, setTab] = useState('dtr');
@@ -109,7 +101,6 @@ export default function SupervisorDashboard({ supervisorName = "Jodilyn P. Bombi
     const [replyText, setReplyText] = useState('');
     const [rejectLogTarget, setRejectLogTarget] = useState(null);
     const [rejectionReason, setRejectionReason] = useState('');
-    const chatEndRef = useRef(null);
 
     const notify = (msg, err = false) => { setToast({ msg, err }); setTimeout(() => setToast(null), 3200); };
 
@@ -267,17 +258,14 @@ export default function SupervisorDashboard({ supervisorName = "Jodilyn P. Bombi
             <aside className="sf-side">
                 <div className="sf-logo"><Shield size={20} /> Supervisor Hub</div>
                 <div className="sf-me">
-                    <div className="av">J</div>
+                    <div className="av">S</div>
                     <div style={{ minWidth: 0 }}>
                         <div className="hd" style={{ fontWeight: 700, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{supervisorName}</div>
                         <div style={{ fontSize: 10, color: '#f87171' }}>OJT Supervisor Portal</div>
                     </div>
                 </div>
-                {NAV.map(n => (
-                    <button key={n.id} className={`nav ${tab === n.id ? 'on' : ''}`} onClick={() => setTab(n.id)}>
-                        <n.icon size={16} /> {n.label}
-                    </button>
-                ))}
+                <button className={`nav ${tab === 'dtr' ? 'on' : ''}`} onClick={() => setTab('dtr')}><FileText size={16} /> DTR Approval Center</button>
+                <button className={`nav ${tab === 'profile' ? 'on' : ''}`} onClick={() => setTab('profile')}><UserCheck size={16} /> Intern Profile & MOA</button>
                 <button className="nav sf-out" onClick={onLogout || (() => window.location.reload())}><LogOut size={16} /> Logout</button>
             </aside>
 
@@ -287,79 +275,8 @@ export default function SupervisorDashboard({ supervisorName = "Jodilyn P. Bombi
                     <span>TOTAL INTERNS: <b>{interns.length || 4}</b></span>
                 </div>
 
-                {/* DASHBOARD TAB */}
-                {tab === 'dashboard' && (<>
-                    <div className="pg" style={{ marginBottom: 16 }}>
-                        <div><h1>SUPERVISOR DASHBOARD OVERVIEW</h1><p>[ OVERALL INTERNSHIP PROGRESS & STATS ]</p></div>
-                    </div>
-
-                    <div className="g4">
-                        <div className="card">
-                            <div className="lbl">Active Interns</div>
-                            <div className="big" style={{ color: '#22d3ee' }}>{interns.length || 4}</div>
-                        </div>
-                        <div className="card" style={{ '--ac': '#facc15' }}>
-                            <div className="lbl">Pending DTR Review</div>
-                            <div className="big" style={{ color: '#facc15' }}>{stats.pending.length}</div>
-                        </div>
-                        <div className="card" style={{ '--ac': '#34d399' }}>
-                            <div className="lbl">Approved DTR Logs</div>
-                            <div className="big" style={{ color: '#34d399' }}>{stats.approved.length}</div>
-                        </div>
-                        <div className="card" style={{ '--ac': '#f87171' }}>
-                            <div className="lbl">Needs Revision</div>
-                            <div className="big" style={{ color: '#f87171' }}>{stats.rejected.length}</div>
-                        </div>
-                    </div>
-
-                    <div className="card">
-                        <div className="sh"><FileText size={16} /> Recent DTR Submissions</div>
-                        <div style={{ overflowX: 'auto' }}>
-                            <table className="tbl">
-                                <thead><tr><th>Student</th><th>Date</th><th>Hours</th><th>Accomplishments</th><th>Status</th></tr></thead>
-                                <tbody>
-                                    {logs.slice(0, 5).map(l => (
-                                        <tr key={idOf(l)}>
-                                            <td style={{ fontWeight: 700, color: '#f8fafc' }}>{l.student_name || 'Student Intern'}</td>
-                                            <td style={{ color: '#22d3ee' }}>{l.log_date || l.date}</td>
-                                            <td style={{ color: '#38bdf8', fontWeight: 700 }}>{hrsOf(l)} hrs</td>
-                                            <td style={{ color: '#94a3b8' }}>{l.accomplishment || l.raw_notes}</td>
-                                            <td><span className={`chip ${statusOf(l) === 'approved' ? 'ok' : statusOf(l) === 'rejected' ? 'bad' : 'warn'}`}>{statusOf(l).toUpperCase()}</span></td>
-                                        </tr>
-                                    ))}
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-                </>)}
-
-                {/* ALL INTERNS TAB */}
-                {tab === 'interns' && (<>
-                    <div className="pg" style={{ marginBottom: 16 }}>
-                        <div><h1>REGISTERED STUDENT INTERNS</h1><p>[ LISTAHAN NG MGA ESTUDYANTE NA NAKA-REGISTER ]</p></div>
-                    </div>
-                    <div className="gt">
-                        {interns.length === 0 ? <div className="card">Loading interns...</div> : interns.map(i => (
-                            <div key={i.id} className="card" style={{ '--ac': '#a78bfa' }}>
-                                <div style={{ display: 'flex', gap: 12, alignItems: 'center', marginBottom: 10 }}>
-                                    <div className="av" style={{ background: 'linear-gradient(135deg,#0891b2,#22d3ee)' }}>{(i.full_name || i.email).charAt(0).toUpperCase()}</div>
-                                    <div>
-                                        <div style={{ fontWeight: 700, fontSize: 14 }}>{i.full_name || 'Student Intern'}</div>
-                                        <div style={{ fontSize: 11, color: '#22d3ee' }}>{i.email}</div>
-                                    </div>
-                                </div>
-                                <div style={{ fontSize: 11, color: '#64748b' }}>Contact: {i.contact_number || 'N/A'}</div>
-                                <button className="btn sm solid" style={{ marginTop: 12, width: '100%', justifyContent: 'center' }} onClick={() => { setSelectedStudentId(i.id); setTab('profile'); }}>
-                                    <UserCheck size={12} /> Edit Profile & MOA
-                                </button>
-                            </div>
-                        ))}
-                    </div>
-                </>)}
-
-                {/* DTR APPROVAL CENTER TAB */}
                 {tab === 'dtr' && (<>
-                    <div className="pg" style={{ marginBottom: 16 }}>
+                    <div className="pg" style={{ marginBottom: 18 }}>
                         <div><h1>DTR APPROVAL & REVISION</h1><p>[ SURIIN AT MAG-APPROVE NG MGA DTR RECORDS ]</p></div>
                     </div>
 
@@ -383,7 +300,7 @@ export default function SupervisorDashboard({ supervisorName = "Jodilyn P. Bombi
                     </div>
 
                     <div className="card">
-                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 14, flexWrap: 'wrap', gap: 10 }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 14, flexWrap: 'wrap', gap: 10, alignItems: 'center' }}>
                             <div style={{ display: 'flex', gap: 8 }}>
                                 {[['all', 'All', logs.length], ['pending', 'Pending', stats.pending.length], ['approved', 'Approved', stats.approved.length], ['rejected', 'Rejected', stats.rejected.length]].map(([k, t, c]) => (
                                     <button key={k} className={`pill ${statusFilter === k ? 'on' : ''}`} onClick={() => setStatusFilter(k)}>{t} [{c}]</button>
@@ -402,8 +319,8 @@ export default function SupervisorDashboard({ supervisorName = "Jodilyn P. Bombi
                                             <td style={{ fontWeight: 700, color: '#f8fafc' }}>{l.student_name || 'Student Intern'}</td>
                                             <td style={{ color: '#22d3ee' }}>{l.log_date || l.date}</td>
                                             <td style={{ color: '#38bdf8', fontWeight: 700 }}>{hrsOf(l)} hrs</td>
-                                            <td style={{ color: '#94a3b8', maxWidth: 220 }}>{l.accomplishment || l.raw_notes}</td>
-                                            <td>{l.proof_url ? <a className="btn sm" href={fullUrl(l.proof_url)} target="_blank" rel="noreferrer"><Paperclip size={12} /> View Proof</a> : 'No File'}</td>
+                                            <td style={{ color: '#94a3b8', maxWidth: 260 }}>{l.accomplishment || l.raw_notes}</td>
+                                            <td>{l.proof_url ? <a className="btn sm" href={fullUrl(l.proof_url)} target="_blank" rel="noreferrer"><Paperclip size={12} /> View Proof <Eye size={12} /></a> : <span style={{ color: '#475569', fontStyle: 'italic' }}>No File</span>}</td>
                                             <td><span className={`chip ${statusOf(l) === 'approved' ? 'ok' : statusOf(l) === 'rejected' ? 'bad' : 'warn'}`}>{statusOf(l).toUpperCase()}</span></td>
                                             <td><div className="act">
                                                 <button className="btn sm ok" onClick={() => handleUpdateDTRStatus(idOf(l), 'approved')}><CheckCircle2 size={12} /> Approve</button>
@@ -418,33 +335,15 @@ export default function SupervisorDashboard({ supervisorName = "Jodilyn P. Bombi
                     </div>
                 </>)}
 
-                {/* MESSAGES TAB */}
-                {tab === 'messages' && (<>
-                    <div className="pg" style={{ marginBottom: 16 }}>
-                        <div><h1>STUDENT THREADS & MESSAGES</h1><p>[ CHAT CONVERSATIONS ON DTR LOGS ]</p></div>
-                    </div>
-                    <div className="gt">
-                        {logs.filter(l => l.messages?.length).length === 0 ? <div className="card">Walang active chat threads.</div> : logs.filter(l => l.messages?.length).map(l => (
-                            <div key={idOf(l)} className="card" style={{ '--ac': '#22d3ee' }}>
-                                <div style={{ fontWeight: 700, color: '#f8fafc', marginBottom: 4 }}>{l.student_name || 'Student Intern'}</div>
-                                <div style={{ fontSize: 11, color: '#a78bfa' }}>DTR Date: {l.log_date || l.date}</div>
-                                <div style={{ margin: '10px 0', fontSize: 11.5, color: '#94a3b8' }}>Last message: {msgText(l.messages[l.messages.length - 1])}</div>
-                                <button className="btn sm solid" onClick={() => setActiveChatLog(l)}><MessageSquare size={12} /> Open Chat Thread</button>
-                            </div>
-                        ))}
-                    </div>
-                </>)}
-
-                {/* INTERN PROFILE & MOA TAB */}
                 {tab === 'profile' && (<>
-                    <div className="pg" style={{ marginBottom: 16 }}>
+                    <div className="pg" style={{ marginBottom: 18 }}>
                         <div><h1>INTERN PROFILE & MOA MANAGEMENT</h1><p>[ EDIT AT I-SYNC ANG REQUIREMENTS NG MGA ESTUDYANTE ]</p></div>
                     </div>
 
                     <div className="card" style={{ marginBottom: 16 }}>
-                        <div style={{ display: 'flex', gap: 12, alignItems: 'center', marginBottom: 14 }}>
+                        <div style={{ display: 'flex', gap: 12, alignItems: 'center', marginBottom: 18 }}>
                             <label className="lbl">Pumili ng Estudyante:</label>
-                            <select className="in" style={{ maxWidth: 300 }} value={selectedStudentId} onChange={e => setSelectedStudentId(e.target.value)}>
+                            <select className="in" style={{ maxWidth: 320 }} value={selectedStudentId} onChange={e => setSelectedStudentId(e.target.value)}>
                                 <option value={2}>Friesy Ferry (Student ID: 2)</option>
                                 {interns.filter(i => i.id !== 2).map(i => (
                                     <option key={i.id} value={i.id}>{i.full_name || i.email} (ID: {i.id})</option>
@@ -452,7 +351,7 @@ export default function SupervisorDashboard({ supervisorName = "Jodilyn P. Bombi
                             </select>
                         </div>
 
-                        <form onSubmit={handleSaveProfile} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                        <form onSubmit={handleSaveProfile} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
                             <div className="g2">
                                 <div><label className="lbl">Paaralan / University</label><input className="in" value={profileForm.school} onChange={e => setProfileForm({ ...profileForm, school: e.target.value })} /></div>
                                 <div><label className="lbl">Course / Degree</label><input className="in" value={profileForm.course} onChange={e => setProfileForm({ ...profileForm, course: e.target.value })} /></div>
@@ -465,18 +364,18 @@ export default function SupervisorDashboard({ supervisorName = "Jodilyn P. Bombi
                             </div>
 
                             <div className="card" style={{ background: 'rgba(5,8,22,.6)' }}>
-                                <div className="lbl" style={{ marginBottom: 10 }}>Requirements Checklist Status</div>
-                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 10 }}>
-                                    <label style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                                <div className="lbl" style={{ marginBottom: 12 }}>Requirements Checklist Status</div>
+                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 12 }}>
+                                    <label style={{ display: 'flex', gap: 8, alignItems: 'center', cursor: 'pointer' }}>
                                         <input type="checkbox" checked={profileForm.moa_signed} onChange={e => setProfileForm({ ...profileForm, moa_signed: e.target.checked })} /> MOA Signed
                                     </label>
-                                    <label style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                                    <label style={{ display: 'flex', gap: 8, alignItems: 'center', cursor: 'pointer' }}>
                                         <input type="checkbox" checked={profileForm.endorsement_letter} onChange={e => setProfileForm({ ...profileForm, endorsement_letter: e.target.checked })} /> Endorsement Letter
                                     </label>
-                                    <label style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                                    <label style={{ display: 'flex', gap: 8, alignItems: 'center', cursor: 'pointer' }}>
                                         <input type="checkbox" checked={profileForm.parent_consent} onChange={e => setProfileForm({ ...profileForm, parent_consent: e.target.checked })} /> Parent Consent Waiver
                                     </label>
-                                    <label style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                                    <label style={{ display: 'flex', gap: 8, alignItems: 'center', cursor: 'pointer' }}>
                                         <input type="checkbox" checked={profileForm.medical_clearance} onChange={e => setProfileForm({ ...profileForm, medical_clearance: e.target.checked })} /> Medical Clearance
                                     </label>
                                 </div>
@@ -488,35 +387,12 @@ export default function SupervisorDashboard({ supervisorName = "Jodilyn P. Bombi
                 </>)}
             </main>
 
-            {/* Chat Modal */}
-            {activeChatLog && (
-                <div className="ovl">
-                    <div className="modal">
-                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 12 }}>
-                            <h3>Chat Thread ({activeChatLog.student_name})</h3>
-                            <button className="btn sm" onClick={() => setActiveChatLog(null)}>X</button>
-                        </div>
-                        <div style={{ maxHeight: 300, overflowY: 'auto', marginBottom: 12, display: 'flex', flexDirection: 'column', gap: 8 }}>
-                            {(activeChatLog.messages || []).map((m, idx) => (
-                                <div key={idx} className={`bub ${m.sender === 'supervisor' ? 'sup' : 'me'}`}>
-                                    <b>{m.sender}:</b> {msgText(m)}
-                                </div>
-                            ))}
-                        </div>
-                        <form onSubmit={handleSendReply} style={{ display: 'flex', gap: 8 }}>
-                            <input className="in" value={replyText} onChange={e => setReplyText(e.target.value)} placeholder="Type a message..." />
-                            <button type="submit" className="btn solid"><Send size={12} /> Send</button>
-                        </form>
-                    </div>
-                </div>
-            )}
-
             {/* Rejection Modal */}
             {rejectLogTarget && (
                 <div className="ovl">
                     <div className="modal">
                         <h3 style={{ color: '#f87171', marginBottom: 12 }}>REJECT DTR RECORD</h3>
-                        <p>Maglagay ng dahilan para sa rejection ng DTR log na ito:</p>
+                        <p style={{ color: '#94a3b8', marginBottom: 12 }}>Maglagay ng dahilan para sa rejection ng DTR log na ito:</p>
                         <textarea className="in" rows="4" value={rejectionReason} onChange={e => setRejectionReason(e.target.value)} placeholder="Dahilan ng rejection..." style={{ resize: 'none', marginBottom: 14 }} />
                         <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
                             <button className="btn" onClick={() => setRejectLogTarget(null)}>Cancel</button>
