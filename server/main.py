@@ -33,6 +33,7 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+
 )
 
 # =====================================================================
@@ -358,6 +359,33 @@ async def get_all_users():
         return res.data or []
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# =====================================================================
+# FILE UPLOAD ENDPOINT (ADDED FOR PROOF FILES & .JFIF SUPPORT)
+# =====================================================================
+@app.post("/api/upload")
+async def upload_proof(file: UploadFile = File(...)):
+    try:
+        file_ext = os.path.splitext(file.filename)[1].lower()
+        allowed_extensions = [".png", ".jpg", ".jpeg", ".jfif", ".webp", ".pdf"]
+        
+        if file_ext not in allowed_extensions:
+            raise HTTPException(status_code=400, detail="Unsupported file format")
+
+        filename = f"{int(time.time())}_{file.filename}"
+        file_path = os.path.join(UPLOAD_DIR, filename)
+
+        with open(file_path, "wb") as f:
+            content = await file.read()
+            f.write(content)
+
+        file_url = f"/uploads/{filename}"
+        return {"message": "File uploaded successfully", "proof_url": file_url, "url": file_url}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Upload failed: {str(e)}")
 
 
 # =====================================================================
