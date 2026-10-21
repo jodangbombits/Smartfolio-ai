@@ -163,6 +163,7 @@ export default function StudentDTR({ portfolioId = 1, studentInfo = null, onLogo
             }
 
             const dtrPayload = {
+                user_id: studentInfo?.id || portfolioId || 1,
                 portfolio_id: portfolioId,
                 log_date: logDate,
                 time_in: timeIn,
