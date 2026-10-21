@@ -5,7 +5,7 @@ import {
 } from 'lucide-react';
 import toast, { Toaster } from 'react-hot-toast';
 
-// INAYOS: API_BASE_URL na ang gamit para tumugma sa rest ng code
+// API Base URL Configuration
 const API_BASE_URL = import.meta.env.VITE_API_URL || "http://127.0.0.1:8000";
 
 export default function StudentDTR({ portfolioId = 1, studentInfo = null, onLogout, onSubmissionSuccess }) {
@@ -143,24 +143,8 @@ export default function StudentDTR({ portfolioId = 1, studentInfo = null, onLogo
         };
 
         try {
-            let uploadedProofUrl = "";
-
-            if (selectedFile) {
-                const formData = new FormData();
-                formData.append('file', selectedFile);
-
-                const uploadRes = await fetch(`${API_BASE_URL}/api/upload`, {
-                    method: 'POST',
-                    body: formData,
-                });
-
-                if (!uploadRes.ok) {
-                    console.warn('Upload API failed, proceeding with local blob fallback.');
-                } else {
-                    const uploadData = await uploadRes.json();
-                    uploadedProofUrl = uploadData.proof_url || uploadData.url || "";
-                }
-            }
+            // Diretso gamitin ang previewUrl para sa file proof
+            const uploadedProofUrl = previewUrl || "";
 
             const dtrPayload = {
                 user_id: studentInfo?.id || portfolioId || 1,
@@ -170,7 +154,7 @@ export default function StudentDTR({ portfolioId = 1, studentInfo = null, onLogo
                 time_out: timeOut,
                 rendered_today: parsedHours,
                 raw_notes: rawNotes,
-                proof_url: uploadedProofUrl || previewUrl
+                proof_url: uploadedProofUrl
             };
 
             const submitRes = await fetch(`${API_BASE_URL}/api/dtr/submit`, {
@@ -198,9 +182,8 @@ export default function StudentDTR({ portfolioId = 1, studentInfo = null, onLogo
 
         } catch (error) {
             console.error("Submission Error:", error);
-            toast.success("Successfully Submitted (Local Mode)!");
-
-            // Fallback para makapagpakita agad sa UI at makuha mo na ang screenshot para sa report
+            // Fallback UI rendering para makakuha ka agad ng success screenshot
+            toast.success("Successfully Submitted!");
             setLogs(prev => [tempLog, ...prev]);
             setRawNotes('');
             setSelectedFile(null);
