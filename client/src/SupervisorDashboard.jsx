@@ -1,8 +1,8 @@
-import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
     LayoutDashboard, UserCheck, Bot, MessageSquare, FileText,
-    CheckCircle2, XCircle, Search, Paperclip, Eye, Save, RotateCcw,
-    AlertCircle, Shield, LogOut, Zap, Send, Download, Printer, Plus
+    CheckCircle2, XCircle, Search, Eye, Save,
+    Users, LogOut, Zap, Send, Download, Printer
 } from 'lucide-react';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || "http://127.0.0.1:8000";
@@ -11,7 +11,7 @@ const API_BASE_URL = import.meta.env.VITE_API_URL || "http://127.0.0.1:8000";
 const idOf = (l) => l.id || l.log_id;
 const hrsOf = (l) => parseFloat(l.rendered_today || l.hoursRendered || 0) || 0;
 const statusOf = (l) => (l.status || 'pending').toLowerCase();
-const msgText = (m) => m.message || m.text || m.remark || m.content || '';
+const msgText = (m) => typeof m === 'string' ? m : (m.message || m.text || m.remark || m.content || '');
 const fullUrl = (u) => !u ? null : /^https?:\/\//i.test(u) ? u : `${API_BASE_URL}${u.startsWith('/') ? '' : '/'}${u}`;
 
 /* ───────────── CSS Styles (Exact Cyberpunk Layout) ───────────── */
@@ -102,9 +102,7 @@ export default function SupervisorDashboard({ supervisorName = "Friesy Ferry", o
     const [search, setSearch] = useState('');
     const [toast, setToast] = useState(null);
     const [logs, setLogs] = useState([]);
-    const [internsList, setInternsList] = useState([]);
 
-    // Profile form state
     const [profileForm, setProfileForm] = useState({
         school: 'Asia Technological School of Science and Arts',
         email: 'jodilyn1290@gmail.com',
@@ -133,7 +131,6 @@ export default function SupervisorDashboard({ supervisorName = "Friesy Ferry", o
 
     const notify = (msg, err = false) => { setToast({ msg, err }); setTimeout(() => setToast(null), 3200); };
 
-    // Default static intern list match sa screenshots
     const staticInterns = [
         { id: 'all', name: 'All Interns', sub: '5 intern(s)', pending: 1, reply: 1 },
         { id: 2, name: 'Jodss Bombs', sub: 'Asia Technological School of Sc...', hours: 100, pending: 2, reply: true, moaExpired: true },
@@ -256,7 +253,6 @@ export default function SupervisorDashboard({ supervisorName = "Friesy Ferry", o
         <div className="sf">
             <style>{CSS}</style>
 
-            {/* Sidebar */}
             <aside className="sf-side">
                 <div className="sf-logo"><Zap size={18} /> SmartFolio Hub</div>
                 <div className="sf-me">
@@ -266,23 +262,24 @@ export default function SupervisorDashboard({ supervisorName = "Friesy Ferry", o
                         <div style={{ fontSize: 10, color: '#a78bfa' }}>OJT Supervisor Portal</div>
                     </div>
                 </div>
-                {NAV.map(n => (
-                    <button key={n.id} className={`nav ${tab === n.id ? 'on' : ''}`} onClick={() => setTab(n.id)}>
-                        <n.icon size={16} /> {n.label}
-                        {n.badge && <span className="bd">{n.badge}</span>}
-                    </button>
-                ))}
+                {NAV.map(n => {
+                    const IconComp = n.icon;
+                    return (
+                        <button key={n.id} className={`nav ${tab === n.id ? 'on' : ''}`} onClick={() => setTab(n.id)}>
+                            <IconComp size={16} /> {n.label}
+                            {n.badge ? <span className="bd">{n.badge}</span> : null}
+                        </button>
+                    );
+                })}
                 <button className="nav sf-out" onClick={onLogout || (() => window.location.reload())}><LogOut size={16} /> Logout Portal</button>
             </aside>
 
-            {/* Main Area */}
             <main className="sf-main">
                 <div className="top">
                     <span><span className="dot" />SYS ONLINE // SUPERVISOR SESSION</span>
                     <span>5 INTERNS MONITORED | DTR & INTERNSHIP HUB</span>
                 </div>
 
-                {/* INTERN CARDS BAR (Present sa Lahat ng Tabs) */}
                 <div className="intern-row">
                     {staticInterns.map(item => (
                         <div key={item.id} className={`intern-card ${selectedInternId === item.id ? 'on' : ''}`} onClick={() => setSelectedInternId(item.id)}>
@@ -298,16 +295,15 @@ export default function SupervisorDashboard({ supervisorName = "Friesy Ferry", o
                                 </div>
                             )}
                             <div style={{ display: 'flex', gap: 4, marginTop: 6, flexWrap: 'wrap' }}>
-                                {item.pending && <span className="chip warn" style={{ fontSize: 9 }}>{item.pending} pending</span>}
-                                {item.reply && <span className="chip bad" style={{ fontSize: 9 }}>1 reply</span>}
-                                {item.moaExpired && <span className="chip bad" style={{ fontSize: 9 }}>MOA EXPIRED</span>}
-                                {item.moaNotRecorded && <span className="chip muted" style={{ fontSize: 9 }}>MOA NOT RECORDED</span>}
+                                {item.pending ? <span className="chip warn" style={{ fontSize: 9 }}>{item.pending} pending</span> : null}
+                                {item.reply ? <span className="chip bad" style={{ fontSize: 9 }}>1 reply</span> : null}
+                                {item.moaExpired ? <span className="chip bad" style={{ fontSize: 9 }}>MOA EXPIRED</span> : null}
+                                {item.moaNotRecorded ? <span className="chip muted" style={{ fontSize: 9 }}>MOA NOT RECORDED</span> : null}
                             </div>
                         </div>
                     ))}
                 </div>
 
-                {/* ───── TAB 1: DTR REVIEW PORTAL ───── */}
                 {tab === 'review' && (<>
                     <div className="pg">
                         <div>
@@ -317,7 +313,7 @@ export default function SupervisorDashboard({ supervisorName = "Friesy Ferry", o
                         <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
                             <div className="srch">
                                 <Search size={14} color="#64748b" />
-                                <input className="in" placeholder="Search intern name, date or notes..." value={search} onChange={e => setSearch(e.target.value)} />
+                                <input placeholder="Search intern name, date or notes..." value={search} onChange={e => setSearch(e.target.value)} />
                             </div>
                             <button className="btn solid"><CheckCircle2 size={14} /> APPROVE ALL PENDINGS [{stats.pending.length}]</button>
                         </div>
@@ -390,7 +386,6 @@ export default function SupervisorDashboard({ supervisorName = "Friesy Ferry", o
                     </div>
                 </>)}
 
-                {/* ───── TAB 2: INTERN PROFILE & MOA ───── */}
                 {tab === 'profile' && (<>
                     <div className="g3" style={{ marginBottom: 16 }}>
                         <div className="card" style={{ '--ac': '#34d399', textAlign: 'center' }}>
@@ -483,7 +478,6 @@ export default function SupervisorDashboard({ supervisorName = "Friesy Ferry", o
                     </form>
                 </>)}
 
-                {/* ───── TAB 3: STUDENT DISCUSSIONS ───── */}
                 {tab === 'discussions' && (<>
                     <div className="pg">
                         <div>
@@ -518,7 +512,6 @@ export default function SupervisorDashboard({ supervisorName = "Friesy Ferry", o
                     </div>
                 </>)}
 
-                {/* ───── TAB 4: DTR SUMMARY REPORTS ───── */}
                 {tab === 'reports' && (<>
                     <div className="pg">
                         <div>
@@ -560,7 +553,6 @@ export default function SupervisorDashboard({ supervisorName = "Friesy Ferry", o
                     </div>
                 </>)}
 
-                {/* ───── TAB 5: AI EVALUATION ───── */}
                 {tab === 'ai' && (
                     <div className="card">
                         <div className="sh"><Bot size={16} /> INTERN AI EVALUATION & PERFORMANCE</div>
@@ -569,7 +561,6 @@ export default function SupervisorDashboard({ supervisorName = "Friesy Ferry", o
                 )}
             </main>
 
-            {/* Chat Modal */}
             {activeChatLog && (
                 <div className="ovl">
                     <div className="modal">
@@ -597,7 +588,6 @@ export default function SupervisorDashboard({ supervisorName = "Friesy Ferry", o
                 </div>
             )}
 
-            {/* Rejection Modal */}
             {rejectLogTarget && (
                 <div className="ovl">
                     <div className="modal">
