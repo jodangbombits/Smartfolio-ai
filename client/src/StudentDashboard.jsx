@@ -302,11 +302,11 @@ export default function StudentDashboard({ studentName: studentNameProp = 'Stude
 
     const notify = (msg, err = false) => { setToast({ msg, err }); setTimeout(() => setToast(null), 3200); };
 
-    /* ── Realtime fetching ── */
+    /* — Realtime fetching — */
     const fetchDTRLogs = useCallback(async () => {
         if (!currentUserId) return;
         try {
-            const cleanUserId = String(currentUserId).split(':')[0];
+            const cleanUserId = String(currentUserId).split(':')[0].replace(/[^0-9]/g, '');
             const res = await fetch(`${API_BASE_URL}/api/dtr/${cleanUserId}`);
             if (!res.ok) return;
             const data = await res.json();
@@ -318,7 +318,7 @@ export default function StudentDashboard({ studentName: studentNameProp = 'Stude
     const fetchInternProfile = useCallback(async () => {
         if (!currentUserId) return;
         try {
-            const cleanUserId = String(currentUserId).split(':')[0];
+            const cleanUserId = String(currentUserId).split(':')[0].replace(/[^0-9]/g, '');
             const res = await fetch(`${API_BASE_URL}/api/interns/${cleanUserId}/profile`);
             if (res.ok) {
                 const data = normProfile(await res.json());
