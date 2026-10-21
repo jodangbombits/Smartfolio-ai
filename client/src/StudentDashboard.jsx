@@ -14,7 +14,7 @@ const keyOf = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, 
 const getLocalDateString = () => keyOf(new Date());
 const parseLocal = (s) => { const [y, m, d] = String(s || '').slice(0, 10).split('-').map(Number); return (y && m && d) ? new Date(y, m - 1, d) : null; };
 const weekStartKey = (s) => { const d = parseLocal(s) || new Date(); d.setDate(d.getDate() - ((d.getDay() + 6) % 7)); return keyOf(d); };
-const shortDate = (d) => d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }); 
+const shortDate = (d) => d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 const addBusinessDays = (n) => { const d = new Date(); let left = n; while (left > 0) { d.setDate(d.getDate() + 1); if (d.getDay() % 6 !== 0) left--; } return d; };
 const msgText = (m) => typeof m === 'string' ? m : (m.message || m.text || m.remark || m.content || '');
 const idOf = (l) => l.id || l.log_id;
@@ -179,7 +179,7 @@ const CSS = `
 .bar>i{display:block;height:100%;background:linear-gradient(90deg,#0891b2,#22d3ee);box-shadow:0 0 10px #22d3ee;transition:width .6s}
 .sh{display:flex;align-items:center;gap:8px;font-family:'Chakra Petch',sans-serif;font-weight:600;letter-spacing:.1em;text-transform:uppercase;font-size:13.5px;color:#f1f5f9;margin-bottom:12px}
 .sh svg{color:var(--cy)}
-.btn{display:inline-flex;align-items:center;gap:6px;padding:8px 14px;border-radius:9px;border:1px solid var(--line);background:rgba(34,211,238,.08);color:var(--cy);font-size:11.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;cursor:pointer;text-decoration:none}
+.btn{display:inline-flex;align-items:center;gap:6px;padding:8px 14px;border-radius:99px;border:1px solid var(--line);background:rgba(34,211,238,.08);color:var(--cy);font-size:11.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;cursor:pointer;text-decoration:none}
 .btn:hover:not(:disabled){background:rgba(34,211,238,.18)}
 .btn:disabled{opacity:.4;cursor:not-allowed}
 .btn.solid{background:linear-gradient(90deg,#0891b2,#0e7490);color:#fff;border-color:#22d3ee;box-shadow:0 0 18px rgba(34,211,238,.4)}
@@ -266,7 +266,6 @@ const HEAD = {
 export default function StudentDashboard({ studentName: studentNameProp = 'Student', studentInfo = null, user = null, onLogout }) {
     const savedUser = safeUser();
     const info = { ...savedUser, ...(user || {}), ...(studentInfo || {}) };
-    // Walang fallback sa fake ID — kung walang user, walang ife-fetch
     const currentUserId = studentInfo?.id || user?.id || savedUser?.id || savedUser?.user_id || null;
     const studentName = studentInfo?.name || studentInfo?.full_name || savedUser?.full_name || savedUser?.name || studentNameProp;
 
@@ -308,7 +307,26 @@ export default function StudentDashboard({ studentName: studentNameProp = 'Stude
             if (!res.ok) return;
             const data = await res.json();
             const list = Array.isArray(data) ? data : (data.logs || []);
-            setLogs(prev => sameJson(prev, list));
+
+            // Pinapanatili ang mga local messages para hindi mawala tuwing nagpo-poll
+            setLogs(prev => {
+                const updatedList = list.map(newLog => {
+                    const prevLog = prev.find(p => idOf(p) === idOf(newLog));
+                    if (prevLog && Array.isArray(prevLog.messages) && prevLog.messages.length > 0) {
+                        const serverMsgs = Array.isArray(newLog.messages) ? newLog.messages : [];
+                        const merged = [...serverMsgs];
+                        prevLog.messages.forEach(pm => {
+                            const exists = merged.some(sm =>
+                                msgText(sm) === msgText(pm) && sm.sender === pm.sender
+                            );
+                            if (!exists) merged.push(pm);
+                        });
+                        return { ...newLog, messages: merged };
+                    }
+                    return newLog;
+                });
+                return sameJson(prev, updatedList);
+            });
         } catch (e) { console.error('Error fetching DTR logs:', e); }
     }, [currentUserId]);
 
@@ -330,7 +348,6 @@ export default function StudentDashboard({ studentName: studentNameProp = 'Stude
         return () => clearInterval(t);
     }, [fetchDTRLogs, fetchInternProfile]);
 
-    // Laging galing sa latest logs ang bukas na chat / resubmit (hindi na stale)
     const activeChatLog = useMemo(() => logs.find(l => idOf(l) === activeChatId) || null, [logs, activeChatId]);
     const resubmitLog = useMemo(() => resubmitTargetLog ? (logs.find(l => idOf(l) === idOf(resubmitTargetLog)) || resubmitTargetLog) : null, [logs, resubmitTargetLog]);
 
@@ -344,6 +361,7 @@ export default function StudentDashboard({ studentName: studentNameProp = 'Stude
         if (end < start) end += 24;
         return parseFloat((end - start).toFixed(2));
     };
+
     /* ── Derived Stats ── */
     const S = useMemo(() => {
         const approved = logs.filter(l => statusOf(l) === 'approved');
@@ -400,7 +418,6 @@ export default function StudentDashboard({ studentName: studentNameProp = 'Stude
         try {
             let proofUrl = existingProofUrl || '';
 
-            // Mag-upload LANG kung may bagong napiling file ang student
             if (proofFile) {
                 try {
                     const fd = new FormData();
@@ -417,11 +434,11 @@ export default function StudentDashboard({ studentName: studentNameProp = 'Stude
                 }
             }
 
-            // Tiyaking makuha ang tamang Log ID
             const targetLogId = resubmitTargetLog ? (resubmitTargetLog.id || resubmitTargetLog.dtr_id || resubmitTargetLog.log_id) : null;
+            const cleanUserId = String(currentUserId).split(':')[0].replace(/[^0-9]/g, '');
 
             const payload = {
-                user_id: Number(currentUserId),
+                user_id: Number(cleanUserId),
                 student_name: String(studentName || ''),
                 log_date: String(logDate || ''),
                 time_in: String(timeIn || ''),
@@ -437,8 +454,6 @@ export default function StudentDashboard({ studentName: studentNameProp = 'Stude
                 payload.dtr_id = Number(targetLogId);
                 payload.id = Number(targetLogId);
             }
-
-            console.log("SENDING DTR PAYLOAD:", payload);
 
             const res = await fetch(`${API_BASE_URL}/api/dtr/submit`, {
                 method: 'POST',
@@ -467,481 +482,477 @@ export default function StudentDashboard({ studentName: studentNameProp = 'Stude
             setIsSubmitting(false);
         }
     };
-};
-const handleSendReply = async (e) => {
-    e.preventDefault();
-    if (!replyText.trim() || !activeChatLog || isSendingChat) return;
 
-    setIsSendingChat(true);
-    const logId = idOf(activeChatLog);
-    const text = replyText.trim();
-    setReplyText('');
+    const handleSendReply = async (e) => {
+        e.preventDefault();
+        if (!replyText.trim() || !activeChatLog || isSendingChat) return;
 
-    const newMsg = {
-        id: Date.now(),
-        sender: 'student',
-        message: text,
-        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+        setIsSendingChat(true);
+        const logId = idOf(activeChatLog);
+        const text = replyText.trim();
+        setReplyText('');
+
+        const newMsg = {
+            id: Date.now(),
+            sender: 'student',
+            message: text,
+            timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+        };
+
+        // Aggressive local UI append para hindi mag-flicker o mawala sa screen
+        setLogs(prev => prev.map(l => {
+            if (idOf(l) === logId) {
+                const existing = Array.isArray(l.messages) ? l.messages : [];
+                return { ...l, messages: [...existing, newMsg] };
+            }
+            return l;
+        }));
+
+        try {
+            const res = await fetch(`${API_BASE_URL}/api/dtr/${logId}/messages`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ sender: 'student', message: text })
+            });
+
+            if (res.ok) {
+                await fetchDTRLogs();
+            } else {
+                notify('Hindi na-save ang message sa server.', true);
+            }
+        } catch (err) {
+            console.error("Chat error:", err);
+            notify('Network error sa pagse-send ng chat.', true);
+        } finally {
+            setIsSendingChat(false);
+        }
     };
 
-    // 1. I-append agad sa local state
-    setLogs(prev => prev.map(l => {
-        if (idOf(l) === logId) {
-            const existing = Array.isArray(l.messages) ? l.messages : [];
-            return { ...l, messages: [...existing, newMsg] };
-        }
-        return l;
-    }));
+    const handleLogout = () => { if (onLogout) onLogout(); else { localStorage.clear(); window.location.reload(); } };
+    const copy = async (t, ok = 'Na-copy.') => { try { await navigator.clipboard.writeText(t); notify(ok); } catch { notify('Hindi ma-copy.', true); } };
 
-    try {
-        const res = await fetch(`${API_BASE_URL}/api/dtr/${logId}/messages`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ sender: 'student', message: text })
-        });
+    const weeklyReport = useMemo(() => {
+        const wk = weekStartKey(getLocalDateString());
+        const rows = logs.filter(l => weekStartKey(dateOf(l)) === wk && statusOf(l) !== 'rejected')
+            .sort((a, b) => String(dateOf(a)).localeCompare(String(dateOf(b))));
+        if (!rows.length) return '';
+        const total = rows.reduce((s, l) => s + hrsOf(l), 0);
+        return [`WEEKLY ACCOMPLISHMENT REPORT`, `Intern: ${studentName}`, `Week of ${shortDate(parseLocal(wk))}`, '',
+            ...rows.map(l => `${dateOf(l)} | ${l.time_in || '08:00'}-${l.time_out || '18:00'} | ${hrsOf(l)} hrs\n${polishNotes(l.accomplishment || l.raw_notes || '')}`),
+            '', `Total hours this week: ${total}`, `Total approved hours to date: ${S.hours} / ${requiredHours}`].join('\n');
+    }, [logs, studentName, S.hours, requiredHours]);
 
-        if (res.ok) {
-            // I-refresh ang logs para makuha ang opisyal na ID at timestamp mula sa DB
-            await fetchDTRLogs();
-        } else {
-            notify('Hindi na-save ang message sa server.', true);
-        }
-    } catch (err) {
-        console.error("Chat error:", err);
-        notify('Network error sa pagse-send ng chat.', true);
-    } finally {
-        setIsSendingChat(false);
-    }
-};
+    const exportCSV = () => {
+        const esc = v => `"${String(v ?? '').replace(/"/g, '""')}"`;
+        const rows = [['Date', 'Time In', 'Time Out', 'Hours', 'Accomplishment', 'Status', 'Supervisor Remark'],
+        ...logs.map(l => [dateOf(l), l.time_in || '08:00', l.time_out || '18:00', hrsOf(l), l.accomplishment || l.raw_notes, statusOf(l), getRejectionRemark(l)])];
+        const url = URL.createObjectURL(new Blob([rows.map(r => r.map(esc).join(',')).join('\n')], { type: 'text/csv' }));
+        const a = document.createElement('a'); a.href = url; a.download = 'my-dtr-logs.csv'; a.click(); URL.revokeObjectURL(url);
+    };
 
-const handleLogout = () => { if (onLogout) onLogout(); else { localStorage.clear(); window.location.reload(); } };
-const copy = async (t, ok = 'Na-copy.') => { try { await navigator.clipboard.writeText(t); notify(ok); } catch { notify('Hindi ma-copy.', true); } };
+    const chip = (l) => { const s = statusOf(l); return <span className={`chip ${s === 'approved' ? 'ok' : s === 'rejected' ? 'bad' : 'warn'}`}>{s.toUpperCase()}</span>; };
 
-const weeklyReport = useMemo(() => {
-    const wk = weekStartKey(getLocalDateString());
-    const rows = logs.filter(l => weekStartKey(dateOf(l)) === wk && statusOf(l) !== 'rejected')
-        .sort((a, b) => String(dateOf(a)).localeCompare(String(dateOf(b))));
-    if (!rows.length) return '';
-    const total = rows.reduce((s, l) => s + hrsOf(l), 0);
-    return [`WEEKLY ACCOMPLISHMENT REPORT`, `Intern: ${studentName}`, `Week of ${shortDate(parseLocal(wk))}`, '',
-        ...rows.map(l => `${dateOf(l)} | ${l.time_in || '08:00'}-${l.time_out || '18:00'} | ${hrsOf(l)} hrs\n${polishNotes(l.accomplishment || l.raw_notes || '')}`),
-        '', `Total hours this week: ${total}`, `Total approved hours to date: ${S.hours} / ${requiredHours}`].join('\n');
-}, [logs, studentName, S.hours, requiredHours]);
+    const renderTable = (rows) => (
+        <div className="tw">
+            <table className="tbl">
+                <thead><tr><th>Date</th><th>Time</th><th>Hours</th><th>Accomplishments</th><th>Proof</th><th>Status</th><th>Messages & Actions</th></tr></thead>
+                <tbody>
+                    {rows.length === 0 && <tr><td colSpan="7"><div className="empty">Walang DTR na tumutugma. Magdagdag ng bagong entry o palitan ang filter.</div></td></tr>}
+                    {rows.map(l => {
+                        const n = l.messages?.length || 0;
+                        const supReply = (l.messages || []).some(m => !isStudentMsg(m));
+                        const remark = statusOf(l) === 'rejected' ? getRejectionRemark(l) : '';
+                        return (
+                            <tr key={idOf(l)}>
+                                <td style={{ color: '#22d3ee', whiteSpace: 'nowrap' }}>{dateOf(l)}</td>
+                                <td style={{ whiteSpace: 'nowrap' }}>{l.time_in || '08:00'} - {l.time_out || '18:00'}</td>
+                                <td style={{ color: '#38bdf8', fontWeight: 700, whiteSpace: 'nowrap' }}>{hrsOf(l)} hrs</td>
+                                <td style={{ color: '#94a3b8', maxWidth: 260 }}>{l.accomplishment || l.raw_notes}</td>
+                                <td>{l.proof_url
+                                    ? <a className="btn sm" href={fullUrl(l.proof_url)} target="_blank" rel="noreferrer"><Paperclip size={12} /> View Proof <Eye size={12} /></a>
+                                    : <span style={{ color: '#475569', fontStyle: 'italic' }}>No file</span>}</td>
+                                <td>
+                                    {chip(l)}
+                                    {remark && <div style={{ color: '#fca5a5', fontSize: 10.5, marginTop: 6, maxWidth: 180, wordBreak: 'break-word' }}>{remark}</div>}
+                                </td>
+                                <td><div className="act">
+                                    <button className="btn sm" style={supReply ? { borderColor: '#22d3ee', boxShadow: '0 0 10px rgba(34,211,238,.35)' } : null} onClick={() => setActiveChatId(idOf(l))}>
+                                        <MessageSquare size={12} /> Chat {n > 0 && <span className="cnt">{n}</span>}
+                                    </button>
+                                    {statusOf(l) === 'rejected' && <button className="btn sm bad" onClick={() => openResubmit(l)}><RotateCcw size={12} /> Resubmit</button>}
+                                </div></td>
+                            </tr>
+                        );
+                    })}
+                </tbody>
+            </table>
+        </div>
+    );
 
-const exportCSV = () => {
-    const esc = v => `"${String(v ?? '').replace(/"/g, '""')}"`;
-    const rows = [['Date', 'Time In', 'Time Out', 'Hours', 'Accomplishment', 'Status', 'Supervisor Remark'],
-    ...logs.map(l => [dateOf(l), l.time_in || '08:00', l.time_out || '18:00', hrsOf(l), l.accomplishment || l.raw_notes, statusOf(l), getRejectionRemark(l)])];
-    const url = URL.createObjectURL(new Blob([rows.map(r => r.map(esc).join(',')).join('\n')], { type: 'text/csv' }));
-    const a = document.createElement('a'); a.href = url; a.download = 'my-dtr-logs.csv'; a.click(); URL.revokeObjectURL(url);
-};
-
-const chip = (l) => { const s = statusOf(l); return <span className={`chip ${s === 'approved' ? 'ok' : s === 'rejected' ? 'bad' : 'warn'}`}>{s.toUpperCase()}</span>; };
-
-const renderTable = (rows) => (
-    <div className="tw">
-        <table className="tbl">
-            <thead><tr><th>Date</th><th>Time</th><th>Hours</th><th>Accomplishments</th><th>Proof</th><th>Status</th><th>Messages & Actions</th></tr></thead>
-            <tbody>
-                {rows.length === 0 && <tr><td colSpan="7"><div className="empty">Walang DTR na tumutugma. Magdagdag ng bagong entry o palitan ang filter.</div></td></tr>}
-                {rows.map(l => {
-                    const n = l.messages?.length || 0;
-                    const supReply = (l.messages || []).some(m => !isStudentMsg(m));
-                    const remark = statusOf(l) === 'rejected' ? getRejectionRemark(l) : '';
-                    return (
-                        <tr key={idOf(l)}>
-                            <td style={{ color: '#22d3ee', whiteSpace: 'nowrap' }}>{dateOf(l)}</td>
-                            <td style={{ whiteSpace: 'nowrap' }}>{l.time_in || '08:00'} - {l.time_out || '18:00'}</td>
-                            <td style={{ color: '#38bdf8', fontWeight: 700, whiteSpace: 'nowrap' }}>{hrsOf(l)} hrs</td>
-                            <td style={{ color: '#94a3b8', maxWidth: 260 }}>{l.accomplishment || l.raw_notes}</td>
-                            <td>{l.proof_url
-                                ? <a className="btn sm" href={fullUrl(l.proof_url)} target="_blank" rel="noreferrer"><Paperclip size={12} /> View Proof <Eye size={12} /></a>
-                                : <span style={{ color: '#475569', fontStyle: 'italic' }}>No file</span>}</td>
-                            <td>
-                                {chip(l)}
-                                {remark && <div style={{ color: '#fca5a5', fontSize: 10.5, marginTop: 6, maxWidth: 180, wordBreak: 'break-word' }}>{remark}</div>}
-                            </td>
-                            <td><div className="act">
-                                <button className="btn sm" style={supReply ? { borderColor: '#22d3ee', boxShadow: '0 0 10px rgba(34,211,238,.35)' } : null} onClick={() => setActiveChatId(idOf(l))}>
-                                    <MessageSquare size={12} /> Chat {n > 0 && <span className="cnt">{n}</span>}
-                                </button>
-                                {statusOf(l) === 'rejected' && <button className="btn sm bad" onClick={() => openResubmit(l)}><RotateCcw size={12} /> Resubmit</button>}
-                            </div></td>
-                        </tr>
-                    );
-                })}
-            </tbody>
-        </table>
-    </div>
-);
-
-const filters = (
-    <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
-        {[['all', 'All', logs.length], ['pending', 'Pending', S.pending.length], ['approved', 'Approved', S.approved.length], ['rejected', 'Rejected', S.rejected.length]].map(([k, t, n]) => (
-            <button key={k} className={`pill ${statusFilter === k ? 'on' : ''}`} onClick={() => setStatusFilter(k)}>{t} [{n}]</button>
-        ))}
-        <label className="srch"><Search size={14} color="#64748b" /><input placeholder="Search date or notes..." value={search} onChange={e => setSearch(e.target.value)} /></label>
-    </div>
-);
-
-const etaText = S.eta ? S.eta.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'Complete';
-
-return (
-    <div className="sf">
-        <style>{CSS}</style>
-
-        <aside className="sf-side">
-            <div className="sf-logo"><Zap size={18} /> SmartFolio Hub</div>
-            <div className="sf-me">
-                <div className="av">{String(studentName).charAt(0).toUpperCase()}</div>
-                <div style={{ minWidth: 0 }}>
-                    <div className="hd" style={{ fontWeight: 700, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{studentName}</div>
-                    <div style={{ fontSize: 10, color: '#a78bfa' }}>DTR Student Portal</div>
-                </div>
-            </div>
-            {NAV.map(n => (
-                <button key={n.id} className={`nav ${tab === n.id ? 'on' : ''}`} onClick={() => setTab(n.id)}>
-                    <n.icon size={16} /> {n.label}
-                    {n.id === 'messages' && S.needsReply.length > 0 && <span className="bd">{S.needsReply.length}</span>}
-                </button>
+    const filters = (
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+            {[['all', 'All', logs.length], ['pending', 'Pending', S.pending.length], ['approved', 'Approved', S.approved.length], ['rejected', 'Rejected', S.rejected.length]].map(([k, t, n]) => (
+                <button key={k} className={`pill ${statusFilter === k ? 'on' : ''}`} onClick={() => setStatusFilter(k)}>{t} [{n}]</button>
             ))}
-            <button className="nav sf-out" onClick={handleLogout}><LogOut size={16} /> Logout Portal</button>
-        </aside>
+            <label className="srch"><Search size={14} color="#64748b" /><input placeholder="Search date or notes..." value={search} onChange={e => setSearch(e.target.value)} /></label>
+        </div>
+    );
 
-        <main className="sf-main">
-            <div className="top">
-                <span><span className="dot" />SYS ONLINE // STUDENT SESSION</span>
-                <span>INTERN: <b style={{ color: '#a78bfa' }}>{studentName}</b> | {requiredHours} HRS REQUIRED</span>
-            </div>
+    const etaText = S.eta ? S.eta.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'Complete';
 
-            <div className="pg">
-                <div><h1>{HEAD[tab][0]}</h1><p>[ {HEAD[tab][1]} ]</p></div>
-                <button className="btn solid" onClick={() => openNew()}><Plus size={15} /> New DTR Entry</button>
-            </div>
+    return (
+        <div className="sf">
+            <style>{CSS}</style>
 
-            {/* ───── DASHBOARD ───── */}
-            {tab === 'dashboard' && (<>
-                <div className="g4">
-                    <div className="card">
-                        <div className="lbl">Approved hours</div>
-                        <div className="big" style={{ color: '#22d3ee' }}>{S.hours}<span style={{ fontSize: 16, color: '#64748b' }}> / {requiredHours}</span></div>
-                        <div className="bar"><i style={{ width: `${S.pct}%` }} /></div>
-                        <div style={{ fontSize: 10.5, color: '#64748b', marginTop: 6 }}>{S.pct}% complete</div>
-                    </div>
-                    <div className="card" style={{ '--ac': '#facc15' }}>
-                        <div className="lbl">Pending approval</div>
-                        <div className="big" style={{ color: '#facc15' }}>{S.pending.length}</div>
-                        <div style={{ fontSize: 10.5, color: '#64748b' }}>Hinihintay ang review ng Supervisor</div>
-                    </div>
-                    <div className="card" style={{ '--ac': '#f87171' }}>
-                        <div className="lbl">Needs revision</div>
-                        <div className="big" style={{ color: '#f87171' }}>{S.rejected.length}</div>
-                        <div style={{ fontSize: 10.5, color: '#64748b' }}>{S.rejected.length ? 'May Resubmit button sa table' : 'Walang kailangang ayusin'}</div>
-                    </div>
-                    <div className="card" style={{ '--ac': '#a78bfa', display: 'flex', alignItems: 'center', gap: 14 }}>
-                        <Ring pct={S.pct} color="#a78bfa" size={84} stroke={8}><b className="hd" style={{ fontSize: 17 }}>{S.pct}%</b></Ring>
-                        <div>
-                            <div className="lbl">Est. completion</div>
-                            <div className="hd" style={{ fontSize: 19, fontWeight: 700, color: '#c4b5fd', margin: '4px 0' }}>{etaText}</div>
-                            <div style={{ fontSize: 10.5, color: '#64748b' }}>{S.remaining} hrs pa | Lun-Biy</div>
-                        </div>
+            <aside className="sf-side">
+                <div className="sf-logo"><Zap size={18} /> SmartFolio Hub</div>
+                <div className="sf-me">
+                    <div className="av">{String(studentName).charAt(0).toUpperCase()}</div>
+                    <div style={{ minWidth: 0 }}>
+                        <div className="hd" style={{ fontWeight: 700, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{studentName}</div>
+                        <div style={{ fontSize: 10, color: '#a78bfa' }}>DTR Student Portal</div>
                     </div>
                 </div>
+                {NAV.map(n => (
+                    <button key={n.id} className={`nav ${tab === n.id ? 'on' : ''}`} onClick={() => setTab(n.id)}>
+                        <n.icon size={16} /> {n.label}
+                        {n.id === 'messages' && S.needsReply.length > 0 && <span className="bd">{S.needsReply.length}</span>}
+                    </button>
+                ))}
+                <button className="nav sf-out" onClick={handleLogout}><LogOut size={16} /> Logout Portal</button>
+            </aside>
 
-                <div className="g2">
+            <main className="sf-main">
+                <div className="top">
+                    <span><span className="dot" />SYS ONLINE // STUDENT SESSION</span>
+                    <span>INTERN: <b style={{ color: '#a78bfa' }}>{studentName}</b> | {requiredHours} HRS REQUIRED</span>
+                </div>
+
+                <div className="pg">
+                    <div><h1>{HEAD[tab][0]}</h1><p>[ {HEAD[tab][1]} ]</p></div>
+                    <button className="btn solid" onClick={() => openNew()}><Plus size={15} /> New DTR Entry</button>
+                </div>
+
+                {/* ───── DASHBOARD ───── */}
+                {tab === 'dashboard' && (<>
+                    <div className="g4">
+                        <div className="card">
+                            <div className="lbl">Approved hours</div>
+                            <div className="big" style={{ color: '#22d3ee' }}>{S.hours}<span style={{ fontSize: 16, color: '#64748b' }}> / {requiredHours}</span></div>
+                            <div className="bar"><i style={{ width: `${S.pct}%` }} /></div>
+                            <div style={{ fontSize: 10.5, color: '#64748b', marginTop: 6 }}>{S.pct}% complete</div>
+                        </div>
+                        <div className="card" style={{ '--ac': '#facc15' }}>
+                            <div className="lbl">Pending approval</div>
+                            <div className="big" style={{ color: '#facc15' }}>{S.pending.length}</div>
+                            <div style={{ fontSize: 10.5, color: '#64748b' }}>Hinihintay ang review ng Supervisor</div>
+                        </div>
+                        <div className="card" style={{ '--ac': '#f87171' }}>
+                            <div className="lbl">Needs revision</div>
+                            <div className="big" style={{ color: '#f87171' }}>{S.rejected.length}</div>
+                            <div style={{ fontSize: 10.5, color: '#64748b' }}>{S.rejected.length ? 'May Resubmit button sa table' : 'Walang kailangang ayusin'}</div>
+                        </div>
+                        <div className="card" style={{ '--ac': '#a78bfa', display: 'flex', alignItems: 'center', gap: 14 }}>
+                            <Ring pct={S.pct} color="#a78bfa" size={84} stroke={8}><b className="hd" style={{ fontSize: 17 }}>{S.pct}%</b></Ring>
+                            <div>
+                                <div className="lbl">Est. completion</div>
+                                <div className="hd" style={{ fontSize: 19, fontWeight: 700, color: '#c4b5fd', margin: '4px 0' }}>{etaText}</div>
+                                <div style={{ fontSize: 10.5, color: '#64748b' }}>{S.remaining} hrs pa | Lun-Biy</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="g2">
+                        <div className="card">
+                            <div className="sh"><CalendarDays size={16} /> Approved hours per week</div>
+                            <div className="chart">
+                                {S.weeks.map(w => (
+                                    <div key={w.label}>
+                                        {w.hrs > 0 && <b>{w.hrs}</b>}
+                                        <i style={{ height: `${(w.hrs / S.maxWeek) * 100}%`, opacity: w.hrs ? 1 : .25 }} />
+                                        <span>{w.label}</span>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                        <div className="card" style={{ '--ac': S.remaining === 0 ? '#34d399' : '#22d3ee', display: 'flex', alignItems: 'center', gap: 18 }}>
+                            <Ring pct={S.pct} size={96} color={S.remaining === 0 ? '#34d399' : '#22d3ee'}><Award size={30} color={S.remaining === 0 ? '#34d399' : '#22d3ee'} /></Ring>
+                            <div>
+                                <div className="lbl">[ Certificate of completion ]</div>
+                                <div className="hd" style={{ fontSize: 20, fontWeight: 700, margin: '6px 0', color: S.remaining === 0 ? '#34d399' : '#facc15' }}>{S.remaining === 0 ? 'ELIGIBLE' : 'NOT YET ELIGIBLE'}</div>
+                                <div style={{ color: '#94a3b8', lineHeight: 1.5 }}>{S.remaining === 0 ? 'Kumpleto mo na ang required hours.' : `Kailangan pa ng ${S.remaining} oras para ma-complete ang ${requiredHours} hrs.`}</div>
+                            </div>
+                        </div>
+                    </div>
+
                     <div className="card">
-                        <div className="sh"><CalendarDays size={16} /> Approved hours per week</div>
-                        <div className="chart">
-                            {S.weeks.map(w => (
-                                <div key={w.label}>
-                                    {w.hrs > 0 && <b>{w.hrs}</b>}
-                                    <i style={{ height: `${(w.hrs / S.maxWeek) * 100}%`, opacity: w.hrs ? 1 : .25 }} />
-                                    <span>{w.label}</span>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', marginBottom: 12 }}>
+                            <div className="sh" style={{ margin: 0 }}><FileText size={16} /> My DTR submissions</div>
+                            {filters}
+                        </div>
+                        {renderTable(visibleLogs)}
+                    </div>
+                </>)}
+
+                {/* ───── LOGS ───── */}
+                {tab === 'logs' && (
+                    <div className="card">
+                        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', marginBottom: 12 }}>
+                            {filters}
+                            <button className="btn" onClick={exportCSV} disabled={!logs.length}><Download size={14} /> Export CSV</button>
+                        </div>
+                        {renderTable(visibleLogs)}
+                    </div>
+                )}
+
+                {/* ───── MESSAGES ───── */}
+                {tab === 'messages' && (<>
+                    <div className="card" style={{ marginBottom: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+                        <div>
+                            <div className="sh" style={{ marginBottom: 4 }}><MessageSquare size={16} /> Active supervisor threads</div>
+                            <div style={{ color: '#64748b' }}>Nauuna ang mga thread na naghihintay ng reply mo.</div>
+                        </div>
+                        <span className={`chip ${S.needsReply.length ? 'warn' : 'ok'}`}>{S.needsReply.length ? `${S.needsReply.length} NEEDS REPLY` : 'ALL CAUGHT UP'}</span>
+                    </div>
+                    {logs.filter(l => l.messages?.length).length === 0 ? (
+                        <div className="card empty"><MessageSquare size={30} /><p>Wala ka pang usapan kasama ang Supervisor.</p>
+                            <button className="btn" onClick={() => setTab('logs')}>Pumunta sa My DTR Logs</button></div>
+                    ) : (
+                        <div className="gt">
+                            {[...logs].filter(l => l.messages?.length)
+                                .sort((a, b) => (S.needsReply.includes(b) ? 1 : 0) - (S.needsReply.includes(a) ? 1 : 0))
+                                .map(l => {
+                                    const last = l.messages[l.messages.length - 1];
+                                    const waiting = !isStudentMsg(last);
+                                    return (
+                                        <div key={idOf(l)} className={`card th ${waiting ? 'new' : ''}`}>
+                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                                <span style={{ color: '#a78bfa' }}>DTR: {dateOf(l)}</span>{chip(l)}
+                                            </div>
+                                            <div><b>Accomplishment:</b> {l.accomplishment || l.raw_notes}</div>
+                                            <div className="pv">{waiting ? 'Supervisor' : 'You'}: {msgText(last)}</div>
+                                            <div style={{ display: 'flex', gap: 8 }}>
+                                                <button className="btn solid" style={{ flex: 1, justifyContent: 'center' }} onClick={() => setActiveChatId(idOf(l))}><MessageSquare size={13} /> Open thread</button>
+                                                <span className="chip" style={{ alignSelf: 'center', color: '#94a3b8', borderColor: 'rgba(255,255,255,.2)' }}>{l.messages.length} msgs</span>
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+                        </div>
+                    )}
+                </>)}
+
+                {/* ───── AI ASSISTANT ───── */}
+                {tab === 'ai' && (<>
+                    <div className="g2">
+                        <div className="card" style={{ '--ac': '#a78bfa' }}>
+                            <div className="sh"><Wand2 size={16} /> Notes polisher</div>
+                            <p style={{ color: '#64748b', margin: '0 0 10px' }}>Ilagay ang raw notes mo (paghiwalayin ng comma). Gagawin itong professional na accomplishment.</p>
+                            <textarea className="ta" placeholder="Halimbawa: ui design, fixing bugs, pos inventory" value={rawIdea} onChange={e => setRawIdea(e.target.value)} />
+                            <div className="act" style={{ margin: '10px 0' }}>
+                                <button className="btn vi" disabled={!rawIdea.trim()} onClick={() => setPolished(polishNotes(rawIdea))}><Sparkles size={13} /> Polish notes</button>
+                            </div>
+                            <div className="out">{polished || 'Lalabas dito ang resulta.'}</div>
+                            <div className="act" style={{ marginTop: 10 }}>
+                                <button className="btn" disabled={!polished} onClick={() => copy(polished)}><Copy size={13} /> Copy</button>
+                                <button className="btn solid" disabled={!polished} onClick={() => openNew(polished)}><Plus size={13} /> Use in new DTR</button>
+                            </div>
+                        </div>
+                        <div className="card" style={{ '--ac': '#34d399' }}>
+                            <div className="sh"><FileText size={16} /> Weekly report</div>
+                            <p style={{ color: '#64748b', margin: '0 0 10px' }}>Awtomatikong ginagawa mula sa mga DTR mo ngayong linggo.</p>
+                            <div className="out" style={{ maxHeight: 250, overflow: 'auto', fontSize: 11.5 }}>{weeklyReport || 'Wala pang DTR ngayong linggo.'}</div>
+                            <div className="act" style={{ marginTop: 10 }}>
+                                <button className="btn" disabled={!weeklyReport} onClick={() => copy(weeklyReport)}><Copy size={13} /> Copy</button>
+                            </div>
+                        </div>
+                    </div>
+                </>)}
+
+                {/* ───── PROFILE ───── */}
+                {tab === 'profile' && (() => {
+                    const today = new Date(); today.setHours(0, 0, 0, 0);
+                    const moa = getMoaState(prof, today);
+                    const reqDone = REQS.filter(r => prof[r.key]).length;
+                    const reqPct = Math.round((reqDone / REQS.length) * 100);
+                    const F = (k, v) => <div key={k}><div className="lbl">{k}</div><div style={{ marginTop: 4, color: v ? '#e2e8f0' : '#475569' }}>{v || 'Wala pang info'}</div></div>;
+                    const moaColor = moa.cls === 'ok' ? '#34d399' : moa.cls === 'bad' ? '#f87171' : moa.cls === 'warn' ? '#facc15' : '#94a3b8';
+                    const ratings = prof.ratings || {};
+                    const hasRatings = RATINGS.some(r => Number(ratings[r.key]) > 0);
+                    return (<>
+                        <div className="g3">
+                            <div className="card" style={{ '--ac': reqPct === 100 ? '#34d399' : '#facc15', display: 'flex', alignItems: 'center', gap: 16 }}>
+                                <Ring pct={reqPct} size={92} stroke={8} color={reqPct === 100 ? '#34d399' : '#facc15'}><CheckCircle2 size={26} color={reqPct === 100 ? '#34d399' : '#facc15'} /></Ring>
+                                <div>
+                                    <div className="lbl">[ Requirements ]</div>
+                                    <div className="big" style={{ fontSize: 28 }}>{reqDone} / {REQS.length}</div>
+                                    <div className="lbl">Complete</div>
                                 </div>
-                            ))}
+                            </div>
+                            <div className="card" style={{ '--ac': moaColor }}>
+                                <div className="lbl">[ MOA status ]</div>
+                                <div style={{ margin: '10px 0' }}><span className={`chip ${moa.cls}`} style={{ fontSize: 12 }}>{moa.label}</span></div>
+                                <div style={{ color: '#94a3b8' }}>{moa.note}</div>
+                            </div>
+                            <div className="card" style={{ '--ac': '#a78bfa' }}>
+                                <div className="lbl">[ Internship progress ]</div>
+                                <div className="big" style={{ fontSize: 28 }}>{S.hours}<span style={{ fontSize: 14, color: '#64748b' }}> / {requiredHours} hrs</span></div>
+                                <div className="bar"><i style={{ width: `${S.pct}%` }} /></div>
+                            </div>
                         </div>
-                    </div>
-                    <div className="card" style={{ '--ac': S.remaining === 0 ? '#34d399' : '#22d3ee', display: 'flex', alignItems: 'center', gap: 18 }}>
-                        <Ring pct={S.pct} size={96} color={S.remaining === 0 ? '#34d399' : '#22d3ee'}><Award size={30} color={S.remaining === 0 ? '#34d399' : '#22d3ee'} /></Ring>
-                        <div>
-                            <div className="lbl">[ Certificate of completion ]</div>
-                            <div className="hd" style={{ fontSize: 20, fontWeight: 700, margin: '6px 0', color: S.remaining === 0 ? '#34d399' : '#facc15' }}>{S.remaining === 0 ? 'ELIGIBLE' : 'NOT YET ELIGIBLE'}</div>
-                            <div style={{ color: '#94a3b8', lineHeight: 1.5 }}>{S.remaining === 0 ? 'Kumpleto mo na ang required hours.' : `Kailangan pa ng ${S.remaining} oras para ma-complete ang ${requiredHours} hrs.`}</div>
+
+                        <div className="g2" style={{ alignItems: 'start' }}>
+                            <div className="col">
+                                <div className="card">
+                                    <div className="sh"><User size={16} /> Student information</div>
+                                    <div className="kv">
+                                        {F('Name', studentName)}
+                                        {F('Email', info.email || prof.email)}
+                                        {F('School', prof.school)}
+                                        {F('Course', prof.course)}
+                                        {F('Year level', prof.yearLevel)}
+                                        {F('Adviser', prof.adviser)}
+                                    </div>
+                                </div>
+                                <div className="card">
+                                    <div className="sh"><Building2 size={16} /> Internship details</div>
+                                    <div className="kv">
+                                        {F('Host company', prof.hostCompany)}
+                                        {F('Department', prof.department)}
+                                        {F('Start date', prof.startDate ? fmtDate(prof.startDate) : '')}
+                                        {F('End date', prof.endDate ? fmtDate(prof.endDate) : '')}
+                                    </div>
+                                </div>
+                                <div className="card" style={{ '--ac': '#a78bfa' }}>
+                                    <div className="sh"><Award size={16} /> Supervisor performance rating</div>
+                                    {!hasRatings ? <div style={{ color: '#475569' }}>Wala pang rating mula sa Supervisor.</div> : RATINGS.map(r => (
+                                        <div key={r.key} className="ms">
+                                            <span style={{ flex: 1 }}>{r.label}</span>
+                                            <div className="dots">{[1, 2, 3, 4, 5].map(n => <i key={n} className={(Number(ratings[r.key]) || 0) >= n ? 'on' : ''} />)}</div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                            <div className="col">
+                                <div className="card">
+                                    <div className="sh"><FileSignature size={16} /> MOA details</div>
+                                    <div className="col" style={{ gap: 12 }}>
+                                        {F('Reference no.', prof.moaNumber)}
+                                        {F('Date signed', prof.moaDateSigned ? fmtDate(prof.moaDateSigned) : '')}
+                                        {F('Valid until', prof.moaValidUntil ? fmtDate(prof.moaValidUntil) : '')}
+                                        {prof.moaFileUrl && <div><a className="btn sm" href={fullUrl(prof.moaFileUrl)} target="_blank" rel="noreferrer"><Paperclip size={12} /> View MOA <Eye size={12} /></a></div>}
+                                    </div>
+                                </div>
+                                <div className="card">
+                                    <div className="sh"><CheckCircle2 size={16} /> Checklist</div>
+                                    {REQS.map(r => (
+                                        <div key={r.key} className={`ms ${prof[r.key] ? 'done' : ''}`}>
+                                            <div className="ic">{prof[r.key] ? <CheckCircle2 size={16} /> : <AlertCircle size={16} />}</div>
+                                            <span style={{ flex: 1 }}>{r.label}</span>
+                                            <span className={`chip ${prof[r.key] ? 'ok' : 'warn'}`}>{prof[r.key] ? 'DONE' : 'MISSING'}</span>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
                         </div>
-                    </div>
-                </div>
+                    </>);
+                })()}
+            </main>
 
-                <div className="card">
-                    <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', marginBottom: 12 }}>
-                        <div className="sh" style={{ margin: 0 }}><FileText size={16} /> My DTR submissions</div>
-                        {filters}
-                    </div>
-                    {renderTable(visibleLogs)}
-                </div>
-            </>)}
+            {/* ───── SUBMIT / RESUBMIT MODAL ───── */}
+            {isSubmitModalOpen && (
+                <div className="ovl">
+                    <div className="modal">
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+                            <h3 style={{ fontSize: 17, textTransform: 'uppercase', display: 'flex', gap: 8, alignItems: 'center' }}>
+                                {resubmitTargetLog ? <RotateCcw size={18} color="#f87171" /> : <Clock size={18} color="#22d3ee" />}
+                                {resubmitTargetLog ? 'Resubmit DTR entry' : 'Submit daily time record'}
+                            </h3>
+                            <button className="btn sm" onClick={() => setIsSubmitModalOpen(false)} aria-label="Close"><X size={14} /></button>
+                        </div>
 
-            {/* ───── LOGS ───── */}
-            {tab === 'logs' && (
-                <div className="card">
-                    <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', marginBottom: 12 }}>
-                        {filters}
-                        <button className="btn" onClick={exportCSV} disabled={!logs.length}><Download size={14} /> Export CSV</button>
+                        {resubmitTargetLog && (
+                            <div style={{ background: 'rgba(239,68,68,.1)', border: '1px solid rgba(239,68,68,.35)', borderRadius: 10, padding: 12, marginBottom: 14 }}>
+                                <div style={{ color: '#f87171', fontWeight: 700, fontSize: 11, display: 'flex', gap: 6, alignItems: 'center', marginBottom: 4 }}><AlertCircle size={14} /> SUPERVISOR REMARK / REJECTION REASON</div>
+                                <div style={{ color: '#fca5a5', lineHeight: 1.5, wordBreak: 'break-word' }}>
+                                    {getRejectionRemark(resubmitLog) || 'Pakiayos ang mga detalye o mag-upload ng bagong proof.'}
+                                </div>
+                            </div>
+                        )}
+
+                        <form onSubmit={handleSubmitDTR} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                            <div><label className="fl">Date</label><input className="in" type="date" value={logDate} onChange={e => setLogDate(e.target.value)} required /></div>
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                                <div><label className="fl">Time in</label><input className="in" type="time" value={timeIn} onChange={e => setTimeIn(e.target.value)} required /></div>
+                                <div><label className="fl">Time out</label><input className="in" type="time" value={timeOut} onChange={e => setTimeOut(e.target.value)} required /></div>
+                            </div>
+                            <div style={{ color: '#22d3ee' }}>Rendered hours: <b>{calcHours(timeIn, timeOut)} hrs</b></div>
+                            <div><label className="fl">Accomplishments / summary</label>
+                                <textarea className="in" rows="4" placeholder="Ano ang mga natapos mo ngayong araw?" value={accomplishment} onChange={e => setAccomplishment(e.target.value)} style={{ resize: 'none' }} required />
+                            </div>
+                            <div>
+                                <label className="fl">Proof / document</label>
+                                <div style={{ position: 'relative', border: '1px dashed rgba(34,211,238,.5)', borderRadius: 10, padding: 14, textAlign: 'center', color: '#22d3ee', background: 'rgba(15,23,42,.6)' }}>
+                                    <input type="file" accept=".png,.jpg,.jpeg,.jfif,.webp,.pdf" aria-label="Upload proof" onChange={e => setProofFile(e.target.files[0] || null)} style={{ position: 'absolute', inset: 0, opacity: 0, cursor: 'pointer', width: '100%' }} />
+                                    <Upload size={15} style={{ verticalAlign: -3 }} /> {proofFile ? proofFile.name : (existingProofUrl ? 'Palitan ang kasalukuyang file' : 'Pumili ng file o image')}
+                                </div>
+                            </div>
+                            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
+                                <button type="button" className="btn" onClick={() => setIsSubmitModalOpen(false)}>Cancel</button>
+                                <button type="submit" className={`btn ${resubmitTargetLog ? 'bad' : 'solid'}`} disabled={isSubmitting}>
+                                    {isSubmitting ? 'Submitting...' : (resubmitTargetLog ? 'Resubmit DTR' : 'Submit DTR')}
+                                </button>
+                            </div>
+                        </form>
                     </div>
-                    {renderTable(visibleLogs)}
                 </div>
             )}
 
-            {/* ───── MESSAGES ───── */}
-            {tab === 'messages' && (<>
-                <div className="card" style={{ marginBottom: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
-                    <div>
-                        <div className="sh" style={{ marginBottom: 4 }}><MessageSquare size={16} /> Active supervisor threads</div>
-                        <div style={{ color: '#64748b' }}>Nauuna ang mga thread na naghihintay ng reply mo.</div>
-                    </div>
-                    <span className={`chip ${S.needsReply.length ? 'warn' : 'ok'}`}>{S.needsReply.length ? `${S.needsReply.length} NEEDS REPLY` : 'ALL CAUGHT UP'}</span>
-                </div>
-                {logs.filter(l => l.messages?.length).length === 0 ? (
-                    <div className="card empty"><MessageSquare size={30} /><p>Wala ka pang usapan kasama ang Supervisor.</p>
-                        <button className="btn" onClick={() => setTab('logs')}>Pumunta sa My DTR Logs</button></div>
-                ) : (
-                    <div className="gt">
-                        {[...logs].filter(l => l.messages?.length)
-                            .sort((a, b) => (S.needsReply.includes(b) ? 1 : 0) - (S.needsReply.includes(a) ? 1 : 0))
-                            .map(l => {
-                                const last = l.messages[l.messages.length - 1];
-                                const waiting = !isStudentMsg(last);
+            {/* ───── CHAT MODAL ───── */}
+            {activeChatLog && (
+                <div className="ovl" style={{ zIndex: 300 }}>
+                    <div className="modal" style={{ width: 'min(520px,100%)', display: 'flex', flexDirection: 'column' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingBottom: 12, marginBottom: 12, borderBottom: '1px solid rgba(255,255,255,.08)' }}>
+                            <div>
+                                <h3 style={{ fontSize: 16, textTransform: 'uppercase', display: 'flex', gap: 8, alignItems: 'center' }}>
+                                    <MessageSquare size={18} color="#22d3ee" /> Supervisor thread
+                                </h3>
+                                <div style={{ fontSize: 11, color: '#64748b', marginTop: 4 }}>
+                                    DTR record: <b style={{ color: '#38bdf8' }}>{dateOf(activeChatLog)}</b>
+                                </div>
+                            </div>
+                            <button className="btn sm" onClick={() => setActiveChatId(null)} aria-label="Close"><X size={14} /></button>
+                        </div>
+
+                        <div style={{ minHeight: 250, maxHeight: 360, overflowY: 'auto', background: 'rgba(5,8,22,.8)', border: '1px solid rgba(255,255,255,.06)', borderRadius: 12, padding: 14, marginBottom: 12, display: 'flex', flexDirection: 'column', gap: 12 }}>
+                            {!activeChatLog.messages?.length ? (
+                                <div className="empty" style={{ margin: 'auto' }}><b style={{ color: '#94a3b8' }}>Wala pang usapan dito.</b></div>
+                            ) : activeChatLog.messages.map((m, i) => {
+                                const me = isStudentMsg(m);
+                                const cleanText = msgText(m).replace(/^REJECTED:\s*/i, '').trim();
+
                                 return (
-                                    <div key={idOf(l)} className={`card th ${waiting ? 'new' : ''}`}>
-                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                            <span style={{ color: '#a78bfa' }}>DTR: {dateOf(l)}</span>{chip(l)}
+                                    <div key={m.id || i} style={{ display: 'flex', flexDirection: 'column', alignItems: me ? 'flex-end' : 'flex-start' }}>
+                                        <div style={{ display: 'flex', gap: 6, alignItems: 'center', fontSize: 10.5, color: '#64748b', marginBottom: 3 }}>
+                                            {me ? <><User size={11} color="#38bdf8" /><b style={{ color: '#38bdf8' }}>You</b></> : <><Shield size={11} color="#f87171" /><b style={{ color: '#f87171' }}>Supervisor</b></>}
+                                            <span>• {m.timestamp || 'Recently'}</span>
                                         </div>
-                                        <div><b>Accomplishment:</b> {l.accomplishment || l.raw_notes}</div>
-                                        <div className="pv">{waiting ? 'Supervisor' : 'You'}: {msgText(last)}</div>
-                                        <div style={{ display: 'flex', gap: 8 }}>
-                                            <button className="btn solid" style={{ flex: 1, justifyContent: 'center' }} onClick={() => setActiveChatId(idOf(l))}><MessageSquare size={13} /> Open thread</button>
-                                            <span className="chip" style={{ alignSelf: 'center', color: '#94a3b8', borderColor: 'rgba(255,255,255,.2)' }}>{l.messages.length} msgs</span>
-                                        </div>
+                                        <div className={`bub ${me ? 'me' : 'sup'}`}>{cleanText}</div>
                                     </div>
                                 );
                             })}
-                    </div>
-                )}
-            </>)}
+                            <div ref={chatEndRef} />
+                        </div>
 
-            {/* ───── AI ASSISTANT ───── */}
-            {tab === 'ai' && (<>
-                <div className="g2">
-                    <div className="card" style={{ '--ac': '#a78bfa' }}>
-                        <div className="sh"><Wand2 size={16} /> Notes polisher</div>
-                        <p style={{ color: '#64748b', margin: '0 0 10px' }}>Ilagay ang raw notes mo (paghiwalayin ng comma). Gagawin itong professional na accomplishment.</p>
-                        <textarea className="ta" placeholder="Halimbawa: ui design, fixing bugs, pos inventory" value={rawIdea} onChange={e => setRawIdea(e.target.value)} />
-                        <div className="act" style={{ margin: '10px 0' }}>
-                            <button className="btn vi" disabled={!rawIdea.trim()} onClick={() => setPolished(polishNotes(rawIdea))}><Sparkles size={13} /> Polish notes</button>
-                        </div>
-                        <div className="out">{polished || 'Lalabas dito ang resulta.'}</div>
-                        <div className="act" style={{ marginTop: 10 }}>
-                            <button className="btn" disabled={!polished} onClick={() => copy(polished)}><Copy size={13} /> Copy</button>
-                            <button className="btn solid" disabled={!polished} onClick={() => openNew(polished)}><Plus size={13} /> Use in new DTR</button>
-                        </div>
-                    </div>
-                    <div className="card" style={{ '--ac': '#34d399' }}>
-                        <div className="sh"><FileText size={16} /> Weekly report</div>
-                        <p style={{ color: '#64748b', margin: '0 0 10px' }}>Awtomatikong ginagawa mula sa mga DTR mo ngayong linggo.</p>
-                        <div className="out" style={{ maxHeight: 250, overflow: 'auto', fontSize: 11.5 }}>{weeklyReport || 'Wala pang DTR ngayong linggo.'}</div>
-                        <div className="act" style={{ marginTop: 10 }}>
-                            <button className="btn" disabled={!weeklyReport} onClick={() => copy(weeklyReport)}><Copy size={13} /> Copy</button>
-                        </div>
+                        <form onSubmit={handleSendReply} style={{ display: 'flex', gap: 8 }}>
+                            <input className="in" value={replyText} onChange={e => setReplyText(e.target.value)} placeholder="Mag-type ng mensahe para sa Supervisor..." />
+                            <button type="submit" className="btn solid" disabled={isSendingChat || !replyText.trim()}><Send size={14} /> Send</button>
+                        </form>
                     </div>
                 </div>
-            </>)}
+            )}
 
-            {/* ───── PROFILE ───── */}
-            {tab === 'profile' && (() => {
-                const today = new Date(); today.setHours(0, 0, 0, 0);
-                const moa = getMoaState(prof, today);
-                const reqDone = REQS.filter(r => prof[r.key]).length;
-                const reqPct = Math.round((reqDone / REQS.length) * 100);
-                const F = (k, v) => <div key={k}><div className="lbl">{k}</div><div style={{ marginTop: 4, color: v ? '#e2e8f0' : '#475569' }}>{v || 'Wala pang info'}</div></div>;
-                const moaColor = moa.cls === 'ok' ? '#34d399' : moa.cls === 'bad' ? '#f87171' : moa.cls === 'warn' ? '#facc15' : '#94a3b8';
-                const ratings = prof.ratings || {};
-                const hasRatings = RATINGS.some(r => Number(ratings[r.key]) > 0);
-                return (<>
-                    <div className="g3">
-                        <div className="card" style={{ '--ac': reqPct === 100 ? '#34d399' : '#facc15', display: 'flex', alignItems: 'center', gap: 16 }}>
-                            <Ring pct={reqPct} size={92} stroke={8} color={reqPct === 100 ? '#34d399' : '#facc15'}><CheckCircle2 size={26} color={reqPct === 100 ? '#34d399' : '#facc15'} /></Ring>
-                            <div>
-                                <div className="lbl">[ Requirements ]</div>
-                                <div className="big" style={{ fontSize: 28 }}>{reqDone} / {REQS.length}</div>
-                                <div className="lbl">Complete</div>
-                            </div>
-                        </div>
-                        <div className="card" style={{ '--ac': moaColor }}>
-                            <div className="lbl">[ MOA status ]</div>
-                            <div style={{ margin: '10px 0' }}><span className={`chip ${moa.cls}`} style={{ fontSize: 12 }}>{moa.label}</span></div>
-                            <div style={{ color: '#94a3b8' }}>{moa.note}</div>
-                        </div>
-                        <div className="card" style={{ '--ac': '#a78bfa' }}>
-                            <div className="lbl">[ Internship progress ]</div>
-                            <div className="big" style={{ fontSize: 28 }}>{S.hours}<span style={{ fontSize: 14, color: '#64748b' }}> / {requiredHours} hrs</span></div>
-                            <div className="bar"><i style={{ width: `${S.pct}%` }} /></div>
-                        </div>
-                    </div>
-
-                    <div className="g2" style={{ alignItems: 'start' }}>
-                        <div className="col">
-                            <div className="card">
-                                <div className="sh"><User size={16} /> Student information</div>
-                                <div className="kv">
-                                    {F('Name', studentName)}
-                                    {F('Email', info.email || prof.email)}
-                                    {F('School', prof.school)}
-                                    {F('Course', prof.course)}
-                                    {F('Year level', prof.yearLevel)}
-                                    {F('Adviser', prof.adviser)}
-                                </div>
-                            </div>
-                            <div className="card">
-                                <div className="sh"><Building2 size={16} /> Internship details</div>
-                                <div className="kv">
-                                    {F('Host company', prof.hostCompany)}
-                                    {F('Department', prof.department)}
-                                    {F('Start date', prof.startDate ? fmtDate(prof.startDate) : '')}
-                                    {F('End date', prof.endDate ? fmtDate(prof.endDate) : '')}
-                                </div>
-                            </div>
-                            <div className="card" style={{ '--ac': '#a78bfa' }}>
-                                <div className="sh"><Award size={16} /> Supervisor performance rating</div>
-                                {!hasRatings ? <div style={{ color: '#475569' }}>Wala pang rating mula sa Supervisor.</div> : RATINGS.map(r => (
-                                    <div key={r.key} className="ms">
-                                        <span style={{ flex: 1 }}>{r.label}</span>
-                                        <div className="dots">{[1, 2, 3, 4, 5].map(n => <i key={n} className={(Number(ratings[r.key]) || 0) >= n ? 'on' : ''} />)}</div>
-                                    </div>
-                                ))}
-                            </div>
-                        </div>
-                        <div className="col">
-                            <div className="card">
-                                <div className="sh"><FileSignature size={16} /> MOA details</div>
-                                <div className="col" style={{ gap: 12 }}>
-                                    {F('Reference no.', prof.moaNumber)}
-                                    {F('Date signed', prof.moaDateSigned ? fmtDate(prof.moaDateSigned) : '')}
-                                    {F('Valid until', prof.moaValidUntil ? fmtDate(prof.moaValidUntil) : '')}
-                                    {prof.moaFileUrl && <div><a className="btn sm" href={fullUrl(prof.moaFileUrl)} target="_blank" rel="noreferrer"><Paperclip size={12} /> View MOA <Eye size={12} /></a></div>}
-                                </div>
-                            </div>
-                            <div className="card">
-                                <div className="sh"><CheckCircle2 size={16} /> Checklist</div>
-                                {REQS.map(r => (
-                                    <div key={r.key} className={`ms ${prof[r.key] ? 'done' : ''}`}>
-                                        <div className="ic">{prof[r.key] ? <CheckCircle2 size={16} /> : <AlertCircle size={16} />}</div>
-                                        <span style={{ flex: 1 }}>{r.label}</span>
-                                        <span className={`chip ${prof[r.key] ? 'ok' : 'warn'}`}>{prof[r.key] ? 'DONE' : 'MISSING'}</span>
-                                    </div>
-                                ))}
-                            </div>
-                        </div>
-                    </div>
-                </>);
-            })()}
-        </main>
-
-        {/* ───── SUBMIT / RESUBMIT MODAL ───── */}
-        {isSubmitModalOpen && (
-            <div className="ovl">
-                <div className="modal">
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-                        <h3 style={{ fontSize: 17, textTransform: 'uppercase', display: 'flex', gap: 8, alignItems: 'center' }}>
-                            {resubmitTargetLog ? <RotateCcw size={18} color="#f87171" /> : <Clock size={18} color="#22d3ee" />}
-                            {resubmitTargetLog ? 'Resubmit DTR entry' : 'Submit daily time record'}
-                        </h3>
-                        <button className="btn sm" onClick={() => setIsSubmitModalOpen(false)} aria-label="Close"><X size={14} /></button>
-                    </div>
-
-                    {resubmitTargetLog && (
-                        <div style={{ background: 'rgba(239,68,68,.1)', border: '1px solid rgba(239,68,68,.35)', borderRadius: 10, padding: 12, marginBottom: 14 }}>
-                            <div style={{ color: '#f87171', fontWeight: 700, fontSize: 11, display: 'flex', gap: 6, alignItems: 'center', marginBottom: 4 }}><AlertCircle size={14} /> SUPERVISOR REMARK / REJECTION REASON</div>
-                            <div style={{ color: '#fca5a5', lineHeight: 1.5, wordBreak: 'break-word' }}>
-                                {getRejectionRemark(resubmitLog) || 'Pakiayos ang mga detalye o mag-upload ng bagong proof.'}
-                            </div>
-                        </div>
-                    )}
-
-                    <form onSubmit={handleSubmitDTR} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-                        <div><label className="fl">Date</label><input className="in" type="date" value={logDate} onChange={e => setLogDate(e.target.value)} required /></div>
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-                            <div><label className="fl">Time in</label><input className="in" type="time" value={timeIn} onChange={e => setTimeIn(e.target.value)} required /></div>
-                            <div><label className="fl">Time out</label><input className="in" type="time" value={timeOut} onChange={e => setTimeOut(e.target.value)} required /></div>
-                        </div>
-                        <div style={{ color: '#22d3ee' }}>Rendered hours: <b>{calcHours(timeIn, timeOut)} hrs</b></div>
-                        <div><label className="fl">Accomplishments / summary</label>
-                            <textarea className="in" rows="4" placeholder="Ano ang mga natapos mo ngayong araw?" value={accomplishment} onChange={e => setAccomplishment(e.target.value)} style={{ resize: 'none' }} required />
-                        </div>
-                        <div>
-                            <label className="fl">Proof / document</label>
-                            <div style={{ position: 'relative', border: '1px dashed rgba(34,211,238,.5)', borderRadius: 10, padding: 14, textAlign: 'center', color: '#22d3ee', background: 'rgba(15,23,42,.6)' }}>
-                                <input type="file" accept=".png,.jpg,.jpeg,.jfif,.webp,.pdf" aria-label="Upload proof" onChange={e => setProofFile(e.target.files[0] || null)} style={{ position: 'absolute', inset: 0, opacity: 0, cursor: 'pointer', width: '100%' }} />
-                                <Upload size={15} style={{ verticalAlign: -3 }} /> {proofFile ? proofFile.name : (existingProofUrl ? 'Palitan ang kasalukuyang file' : 'Pumili ng file o image')}
-                            </div>
-                        </div>
-                        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
-                            <button type="button" className="btn" onClick={() => setIsSubmitModalOpen(false)}>Cancel</button>
-                            <button type="submit" className={`btn ${resubmitTargetLog ? 'bad' : 'solid'}`} disabled={isSubmitting}>
-                                {isSubmitting ? 'Submitting...' : (resubmitTargetLog ? 'Resubmit DTR' : 'Submit DTR')}
-                            </button>
-                        </div>
-                    </form>
-                </div>
-            </div>
-        )}
-
-        {/* ───── CHAT MODAL ───── */}
-        {activeChatLog && (
-            <div className="ovl" style={{ zIndex: 300 }}>
-                <div className="modal" style={{ width: 'min(520px,100%)', display: 'flex', flexDirection: 'column' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingBottom: 12, marginBottom: 12, borderBottom: '1px solid rgba(255,255,255,.08)' }}>
-                        <div>
-                            <h3 style={{ fontSize: 16, textTransform: 'uppercase', display: 'flex', gap: 8, alignItems: 'center' }}>
-                                <MessageSquare size={18} color="#22d3ee" /> Supervisor thread
-                            </h3>
-                            <div style={{ fontSize: 11, color: '#64748b', marginTop: 4 }}>
-                                DTR record: <b style={{ color: '#38bdf8' }}>{dateOf(activeChatLog)}</b>
-                            </div>
-                        </div>
-                        <button className="btn sm" onClick={() => setActiveChatId(null)} aria-label="Close"><X size={14} /></button>
-                    </div>
-
-                    <div style={{ minHeight: 250, maxHeight: 360, overflowY: 'auto', background: 'rgba(5,8,22,.8)', border: '1px solid rgba(255,255,255,.06)', borderRadius: 12, padding: 14, marginBottom: 12, display: 'flex', flexDirection: 'column', gap: 12 }}>
-                        {!activeChatLog.messages?.length ? (
-                            <div className="empty" style={{ margin: 'auto' }}><b style={{ color: '#94a3b8' }}>Wala pang usapan dito.</b></div>
-                        ) : activeChatLog.messages.map((m, i) => {
-                            const me = isStudentMsg(m);
-                            // Linisin ang message text para hindi magpakita ang REJECTED: prefix sa chat window
-                            const cleanText = msgText(m).replace(/^REJECTED:\s*/i, '').trim();
-
-                            return (
-                                <div key={m.id || i} style={{ display: 'flex', flexDirection: 'column', alignItems: me ? 'flex-end' : 'flex-start' }}>
-                                    <div style={{ display: 'flex', gap: 6, alignItems: 'center', fontSize: 10.5, color: '#64748b', marginBottom: 3 }}>
-                                        {me ? <><User size={11} color="#38bdf8" /><b style={{ color: '#38bdf8' }}>You</b></> : <><Shield size={11} color="#f87171" /><b style={{ color: '#f87171' }}>Supervisor</b></>}
-                                        <span>• {m.timestamp || 'Recently'}</span>
-                                    </div>
-                                    <div className={`bub ${me ? 'me' : 'sup'}`}>{cleanText}</div>
-                                </div>
-                            );
-                        })}
-                        <div ref={chatEndRef} />
-                    </div>
-
-                    <form onSubmit={handleSendReply} style={{ display: 'flex', gap: 8 }}>
-                        <input className="in" value={replyText} onChange={e => setReplyText(e.target.value)} placeholder="Mag-type ng mensahe para sa Supervisor..." />
-                        <button type="submit" className="btn solid" disabled={isSendingChat || !replyText.trim()}><Send size={14} /> Send</button>
-                    </form>
-                </div>
-            </div>
-        )}
-
-        {toast && <div className={`toast ${toast.err ? 'err' : ''}`} role="status">{toast.msg}</div>}
-    </div>
-);
-
-
-
+            {toast && <div className={`toast ${toast.err ? 'err' : ''}`} role="status">{toast.msg}</div>}
+        </div>
+    );
+}
