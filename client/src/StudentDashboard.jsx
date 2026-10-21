@@ -268,7 +268,7 @@ export default function StudentDashboard({ studentName: studentNameProp = 'Stude
             if (res.ok) {
                 const rawData = await res.json();
 
-                let profileObj = rawData;
+                let profileObj = rawData || {};
                 if (rawData && rawData.data) {
                     if (typeof rawData.data === 'string') {
                         try { profileObj = JSON.parse(rawData.data); } catch (e) { profileObj = rawData; }
@@ -311,10 +311,12 @@ export default function StudentDashboard({ studentName: studentNameProp = 'Stude
     }, [currentUserId]);
 
     useEffect(() => {
-        fetchDTRLogs(); fetchInternProfile();
-        const t = setInterval(() => { fetchDTRLogs(); fetchInternProfile(); }, 4000);
+        fetchInternProfile();
+        const t = setInterval(() => {
+            fetchInternProfile();
+        }, 4000);
         return () => clearInterval(t);
-    }, [fetchDTRLogs, fetchInternProfile]);
+    }, [fetchInternProfile]);
 
     const activeMessageCount = activeChatLog?.messages?.length || 0;
     useEffect(() => { if (activeMessageCount > 0) chatEndRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [activeMessageCount]);
