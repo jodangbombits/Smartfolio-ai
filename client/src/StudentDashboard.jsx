@@ -20,6 +20,18 @@ const idOf = (l) => l.id || l.log_id;
 const hrsOf = (l) => parseFloat(l.rendered_today || l.hoursRendered || 0) || 0;
 const statusOf = (l) => (l.status || 'pending').toLowerCase();
 
+// Safe Extractor para sa Rejection Remarks / Supervisor Reason
+const getRejectionRemark = (log) => {
+    if (!log) return '';
+    return log.rejection_reason ||
+        log.remarks ||
+        log.supervisor_comment ||
+        log.supervisor_remark ||
+        log.rejectionReason ||
+        log.reason ||
+        '';
+};
+
 const parseDate = (s) => { if (!s) return null; const [y, m, d] = String(s).slice(0, 10).split('-').map(Number); return (y && m && d) ? new Date(y, m - 1, d) : null; };
 const fmtDate = (s) => { const d = s instanceof Date ? s : parseDate(s); return d ? d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '—'; };
 const fullUrl = (u) =>
@@ -260,7 +272,7 @@ export default function StudentDashboard({ studentName: studentNameProp = 'Stude
 
     const notify = (msg, err = false) => { setToast({ msg, err }); setTimeout(() => setToast(null), 3200); };
 
-    /* ── data ── */
+    /* ── Realtime DTR Fetching (2s Interval) ── */
     const fetchDTRLogs = useCallback(async () => {
         if (!currentUserId) return;
         try {
@@ -269,9 +281,19 @@ export default function StudentDashboard({ studentName: studentNameProp = 'Stude
             const data = await res.json();
             const list = Array.isArray(data) ? data : (data.logs || []);
             setLogs(list);
+
+            // Sync Active Chat Modal Realtime
             setActiveChatLog(prev => {
                 if (!prev) return null;
-                return list.find(l => idOf(l) === idOf(prev)) || prev;
+                const updated = list.find(l => idOf(l) === idOf(prev));
+                return updated || prev;
+            });
+
+            // Sync Resubmit Target Modal Realtime so Remarks update instantly
+            setResubmitTargetLog(prev => {
+                if (!prev) return null;
+                const updated = list.find(l => idOf(l) === idOf(prev));
+                return updated || prev;
             });
         } catch (e) { console.error('Error fetching DTR logs:', e); }
     }, [currentUserId]);
@@ -290,7 +312,7 @@ export default function StudentDashboard({ studentName: studentNameProp = 'Stude
 
     useEffect(() => {
         fetchDTRLogs(); fetchInternProfile();
-        const t = setInterval(() => { fetchDTRLogs(); fetchInternProfile(); }, 4000);
+        const t = setInterval(() => { fetchDTRLogs(); fetchInternProfile(); }, 2000);
         return () => clearInterval(t);
     }, [fetchDTRLogs, fetchInternProfile]);
 
@@ -354,12 +376,12 @@ export default function StudentDashboard({ studentName: studentNameProp = 'Stude
         setAccomplishment(log.accomplishment || log.raw_notes || ''); setExistingProofUrl(log.proof_url || ''); setProofFile(null); setIsSubmitModalOpen(true);
     };
 
-    /* ───── FIXED REALTIME SUBMIT & RESUBMIT DTR HANDLER ───── */
+    /* ───── REALTIME SUBMIT & RESUBMIT HANDLER ───── */
     const handleSubmitDTR = async (e) => {
         e.preventDefault();
         const hours = calcHours(timeIn, timeOut);
         if (hours <= 0) { notify('Mali ang oras. Siguraduhing tama ang Time In at Time Out.', true); return; }
-        
+
         setIsSubmitting(true);
         try {
             let proofUrl = existingProofUrl;
@@ -372,48 +394,49 @@ export default function StudentDashboard({ studentName: studentNameProp = 'Stude
                 proofUrl = d.proof_url || d.url || '';
             }
 
-            const payload = { 
-                user_id: Number(currentUserId), 
+            const payload = {
+                user_id: Number(currentUserId),
                 student_name: studentName,
-                log_date: logDate, 
-                time_in: timeIn, 
-                time_out: timeOut, 
-                rendered_today: hours, 
+                log_date: logDate,
+                time_in: timeIn,
+                time_out: timeOut,
+                rendered_today: hours,
                 accomplishment: accomplishment,
-                raw_notes: accomplishment, 
+                raw_notes: accomplishment,
                 proof_url: proofUrl,
-                status: 'pending' // Automatically resets status to pending on submit/resubmit
+                status: 'pending' // Reset to pending state on submission/resubmission
             };
 
             if (resubmitTargetLog) {
                 payload.dtr_id = idOf(resubmitTargetLog);
             }
 
-            const res = await fetch(`${API_BASE_URL}/api/dtr/submit`, { 
-                method: 'POST', 
-                headers: { 'Content-Type': 'application/json' }, 
-                body: JSON.stringify(payload) 
+            const res = await fetch(`${API_BASE_URL}/api/dtr/submit`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
             });
 
             if (res.ok) {
                 notify(resubmitTargetLog ? 'Na-resubmit na ang DTR mo at naka-PENDING na ulit!' : 'Na-submit na ang DTR!');
-                setIsSubmitModalOpen(false); 
-                setResubmitTargetLog(null); 
+                setIsSubmitModalOpen(false);
+                setResubmitTargetLog(null);
                 setAccomplishment('');
                 setProofFile(null);
-                fetchDTRLogs(); // Instant refresh of student DTR logs
+                fetchDTRLogs();
             } else {
                 const err = await res.json().catch(() => ({}));
                 notify('Hindi na-submit: ' + (err.detail || 'Subukang muli.'), true);
             }
-        } catch (err) { 
-            console.error(err); 
-            notify('Hindi maka-connect sa server. Naka-on ba ang backend?', true); 
-        } finally { 
-            setIsSubmitting(false); 
+        } catch (err) {
+            console.error(err);
+            notify('Hindi maka-connect sa server. Naka-on ba ang backend?', true);
+        } finally {
+            setIsSubmitting(false);
         }
     };
 
+    /* ───── REALTIME CHAT SENDER ───── */
     const handleSendReply = async (e) => {
         e.preventDefault();
         if (!replyText.trim() || !activeChatLog || isSendingChat) return;
@@ -421,10 +444,18 @@ export default function StudentDashboard({ studentName: studentNameProp = 'Stude
         const logId = idOf(activeChatLog), text = replyText.trim();
         setReplyText('');
         const payload = { sender: 'student', message: text, text, timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) };
+
+        // Instant Optimistic State Update for Realtime Chat Display
         setActiveChatLog(prev => prev ? { ...prev, messages: [...(prev.messages || []), payload] } : null);
+        setLogs(prevLogs => prevLogs.map(l => idOf(l) === logId ? { ...l, messages: [...(l.messages || []), payload] } : l));
+
         try {
-            const res = await fetch(`${API_BASE_URL}/api/dtr/${logId}/messages`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
-            if (res.ok) await fetchDTRLogs();
+            const res = await fetch(`${API_BASE_URL}/api/dtr/${logId}/messages`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+            if (res.ok) fetchDTRLogs();
         } catch (err) { console.error('Error sending message:', err); }
         finally { setIsSendingChat(false); }
     };
@@ -839,7 +870,7 @@ export default function StudentDashboard({ studentName: studentNameProp = 'Stude
                 })()}
             </main>
 
-            {/* ───── SUBMIT / RESUBMIT MODAL ───── */}
+            {/* ───── SUBMIT / RESUBMIT MODAL (PROPER REJECTION REMARK DISPLAY) ───── */}
             {isSubmitModalOpen && (
                 <div className="ovl">
                     <div className="modal">
@@ -853,16 +884,9 @@ export default function StudentDashboard({ studentName: studentNameProp = 'Stude
 
                         {resubmitTargetLog && (
                             <div style={{ background: 'rgba(239,68,68,.1)', border: '1px solid rgba(239,68,68,.35)', borderRadius: 10, padding: 12, marginBottom: 14 }}>
-                                <div style={{ color: '#f87171', fontWeight: 700, fontSize: 11, display: 'flex', gap: 6, alignItems: 'center', marginBottom: 4 }}>
-                                    <AlertCircle size={14} /> SUPERVISOR REMARK / REJECTION REASON
-                                </div>
-                                <div style={{ color: '#fca5a5', lineHeight: 1.5 }}>
-                                    {/* Lalabas na dito ang eksaktong dahilan na itinype ni Supervisor */}
-                                    {resubmitTargetLog.rejection_reason ||
-                                        resubmitTargetLog.remarks ||
-                                        resubmitTargetLog.supervisor_comment ||
-                                        resubmitTargetLog.rejectionReason ||
-                                        'Walang inilagay na dahilan ang Supervisor.'}
+                                <div style={{ color: '#f87171', fontWeight: 700, fontSize: 11, display: 'flex', gap: 6, alignItems: 'center', marginBottom: 4 }}><AlertCircle size={14} /> SUPERVISOR REMARK / REJECTION REASON</div>
+                                <div style={{ color: '#fca5a5', lineHeight: 1.5, wordBreak: 'break-word' }}>
+                                    {getRejectionRemark(resubmitTargetLog) || 'Pakiayos ang mga detalye o mag-upload ng bagong proof.'}
                                 </div>
                             </div>
                         )}
@@ -901,6 +925,7 @@ export default function StudentDashboard({ studentName: studentNameProp = 'Stude
                 <div className="ovl" style={{ zIndex: 300 }}>
                     <div className="modal" style={{ width: 'min(520px,100%)', display: 'flex', flexDirection: 'column' }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingBottom: 12, marginBottom: 12, borderBottom: '1px solid rgba(255,255,255,.08)' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingBottom: 12, marginBottom: 12, borderBottom: '1px solid rgba(255,255,255,.08)' }}>
                             <div>
                                 <h3 style={{ fontSize: 16, letterSpacing: '.08em', textTransform: 'uppercase', display: 'flex', gap: 8, alignItems: 'center' }}><MessageSquare size={18} color="#22d3ee" /> Supervisor thread</h3>
                                 <div style={{ fontSize: 11, color: '#64748b', marginTop: 4 }}>DTR record: <b style={{ color: '#38bdf8' }}>{activeChatLog.log_date || activeChatLog.date}</b></div>
@@ -911,7 +936,7 @@ export default function StudentDashboard({ studentName: studentNameProp = 'Stude
                             {!activeChatLog.messages?.length ? (
                                 <div className="empty" style={{ margin: 'auto' }}><b style={{ color: '#94a3b8' }}>Wala pang usapan dito.</b><p style={{ fontSize: 11 }}>Mag-message sa baba kung may tanong ka sa Supervisor.</p></div>
                             ) : activeChatLog.messages.map((m, i) => {
-                                const me = m.sender === 'student';
+                                const me = m.sender === 'student';s
                                 return (
                                     <div key={m.id || i} style={{ display: 'flex', flexDirection: 'column', alignItems: me ? 'flex-end' : 'flex-start' }}>
                                         <div style={{ display: 'flex', gap: 6, alignItems: 'center', fontSize: 10.5, color: '#64748b', marginBottom: 3 }}>
