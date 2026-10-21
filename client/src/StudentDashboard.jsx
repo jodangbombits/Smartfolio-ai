@@ -391,7 +391,6 @@ export default function StudentDashboard({ studentName: studentNameProp = 'Stude
 
     const handleSubmitDTR = async (e) => {
         e.preventDefault();
-        if (!currentUserId) { notify('Walang naka-login na user. Mag-login ulit.', true); return; }
         const hours = calcHours(timeIn, timeOut);
         if (hours <= 0) { notify('Mali ang oras. Siguraduhing tama ang Time In at Time Out.', true); return; }
 
@@ -402,25 +401,42 @@ export default function StudentDashboard({ studentName: studentNameProp = 'Stude
                 const fd = new FormData();
                 fd.append('file', await compressImage(proofFile));
                 const up = await fetch(`${API_BASE_URL}/api/upload`, { method: 'POST', body: fd });
-                if (!up.ok) { notify('Hindi na-upload ang proof. PNG, JPG, WEBP o PDF lang.', true); return; }
+                if (!up.ok) { notify('Hindi na-upload ang proof. Subukan ulit.', true); return; }
                 const d = await up.json();
                 proofUrl = d.proof_url || d.url || '';
             }
 
             const payload = {
-                user_id: Number(currentUserId), student_name: studentName, log_date: logDate,
-                time_in: timeIn, time_out: timeOut, rendered_today: hours,
-                accomplishment, raw_notes: accomplishment, proof_url: proofUrl, status: 'pending'
+                user_id: Number(currentUserId),
+                student_name: studentName,
+                log_date: logDate,
+                time_in: timeIn,
+                time_out: timeOut,
+                rendered_today: hours,
+                accomplishment: accomplishment,
+                raw_notes: accomplishment,
+                proof_url: proofUrl,
+                status: 'pending'
             };
-            if (resubmitTargetLog) payload.dtr_id = idOf(resubmitTargetLog);
+
+            // Gamitin ang mismong ID ng log para sa update
+            if (resubmitTargetLog) {
+                payload.dtr_id = idOf(resubmitTargetLog);
+                payload.id = idOf(resubmitTargetLog);
+            }
 
             const res = await fetch(`${API_BASE_URL}/api/dtr/submit`, {
-                method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload)
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
             });
 
             if (res.ok) {
                 notify(resubmitTargetLog ? 'Na-resubmit na ang DTR mo at naka-PENDING na ulit!' : 'Na-submit na ang DTR!');
-                setIsSubmitModalOpen(false); setResubmitTargetLog(null); setAccomplishment(''); setProofFile(null);
+                setIsSubmitModalOpen(false);
+                setResubmitTargetLog(null);
+                setAccomplishment('');
+                setProofFile(null);
                 fetchDTRLogs();
             } else {
                 notify('Hindi na-submit. Subukang muli.', true);
@@ -431,7 +447,6 @@ export default function StudentDashboard({ studentName: studentNameProp = 'Stude
             setIsSubmitting(false);
         }
     };
-
     const handleSendReply = async (e) => {
         e.preventDefault();
         if (!replyText.trim() || !activeChatLog || isSendingChat) return;
