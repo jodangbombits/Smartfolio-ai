@@ -412,6 +412,9 @@ async def upload_proof(file: UploadFile = File(...)):
         raise HTTPException(status_code=500, detail=f"Upload failed: {str(e)}")
 
 
+# =====================================================================
+# DTR ENDPOINTS
+# =====================================================================
 @app.post("/api/dtr/submit")
 async def submit_dtr(request: Request):
     if not supabase:
@@ -434,37 +437,163 @@ async def submit_dtr(request: Request):
         except (ValueError, TypeError):
             rendered_today = 8.0
 
-        # Mismong mga tunay na columns lang sa dtr_logs table ang narito!
-        base_log = {
+        # Kapag resubmit, pabalikin sa 'pending' at linisin ang rejection fields
+        log_data = {
             "user_id": int(user_id) if user_id else None,
             "log_date": log_date,
             "time_in": time_in,
             "time_out": time_out,
             "rendered_today": rendered_today,
             "raw_notes": raw_notes,
+            "accomplishment": raw_notes,
             "proof_url": proof_url,
             "status": "pending",
-            "rejection_reason": ""
+            "rejection_reason": "",
+            "remarks": ""
         }
 
         if dtr_id:
-            target_id = int(dtr_id)
+            # I-update ang umiiral na DTR row sa Supabase
             try:
-                res = supabase.table("dtr_logs").update(base_log).eq("id", target_id).execute()
-            except Exception as update_err:
-                # Fallback kung sakaling walang rejection_reason column
-                base_log.pop("rejection_reason", None)
-                res = supabase.table("dtr_logs").update(base_log).eq("id", target_id).execute()
+                res = supabase.table("dtr_logs").update(log_data).eq("id", int(dtr_id)).execute()
+            except Exception:
+                # Fallback kung sakaling walang 'remarks' o 'rejection_reason' column sa schema
+                log_data.pop("remarks", None)
+                try:
+                    res = supabase.table("dtr_logs").update(log_data).eq("id", int(dtr_id)).execute()
+                except Exception:
+                    log_data.pop("rejection_reason", None)
+                    res = supabase.table("dtr_logs").update(log_data).eq("id", int(dtr_id)).execute()
         else:
+            # Mag-insert ng bagong DTR row
             try:
-                res = supabase.table("dtr_logs").insert(base_log).execute()
-            except Exception as insert_err:
-                base_log.pop("rejection_reason", None)
-                res = supabase.table("dtr_logs").insert(base_log).execute()
+                res = supabase.table("dtr_logs").insert(log_data).execute()
+            except Exception:
+                log_data.pop("remarks", None)
+                log_data.pop("rejection_reason", None)
+                res = supabase.table("dtr_logs").insert(log_data).execute()
 
         return {"status": "success", "message": "DTR saved successfully", "data": res.data if hasattr(res, 'data') else None}
     except Exception as e:
         print("DTR SUBMIT ERROR:", str(e))
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/dtr/all")
+@app.get("/api/dtr-logs")
+async def get_all_dtr_logs(user_id: Optional[int] = None):
+    if not supabase:
+        raise HTTPException(status_code=500, detail="Database client not configured")
+    try:
+        query = supabase.table("dtr_logs").select("*, users(full_name)").order("id", desc=True)
+        if user_id:
+            query = query.eq("user_id", user_id)
+
+        res = query.execute()
+        logs = []
+        for r in res.data or []:
+            student_name = r.get("users", {}).get("full_name") if isinstance(r.get("users"), dict) else None
+            r["student_name"] = student_name or "Unknown Student"
+            logs.append(r)
+        return logs
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/dtr/{user_id}")
+async def get_dtr_logs(user_id: int):
+    if not supabase:
+        raise HTTPException(status_code=500, detail="Database client not configured")
+    try:
+        # Kunin ang logs ng student
+        res = supabase.table("dtr_logs").select("*").eq("user_id", user_id).order("id", desc=True).execute()
+        logs = res.data or []
+
+        # Isama ang pinakabagong remark mula sa dtr_remarks table para sa bawat log
+        for log in logs:
+            log_id = log.get("id")
+            if log_id:
+                try:
+                    remarks_res = supabase.table("dtr_remarks").select("*").eq("dtr_id", log_id).order("id", desc=True).limit(1).execute()
+                    if remarks_res.data and len(remarks_res.data) > 0:
+                        latest_remark = remarks_res.data[0].get("message", "")
+                        # Linisin ang prefix kung may 'REJECTED:'
+                        clean_remark = latest_remark.replace("REJECTED:", "").strip()
+                        log["remarks"] = clean_remark
+                        if not log.get("rejection_reason"):
+                            log["rejection_reason"] = clean_remark
+                except Exception as r_err:
+                    print("Error fetching remarks for log:", log_id, str(r_err))
+
+        return logs
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/dtr-logs/{log_id}/status")
+@app.post("/api/dtr/{log_id}/status")
+async def update_dtr_status(log_id: int, request: Request):
+    if not supabase:
+        raise HTTPException(status_code=500, detail="Database client not configured")
+
+    payload = await request.json()
+    status_val = str(payload.get("status") or "pending").lower()
+    if status_val not in ("pending", "approved", "rejected"):
+        raise HTTPException(status_code=400, detail="Invalid status")
+
+    reason = str(
+        payload.get("rejection_reason")
+        or payload.get("remarks")
+        or payload.get("supervisor_comment")
+        or ""
+    )
+
+    try:
+        # 1. Update status lang muna sa dtr_logs table
+        res = supabase.table("dtr_logs").update({"status": status_val}).eq("id", log_id).execute()
+
+        # 2. Kapag may rejection message at naging rejected, mag-insert sa dtr_remarks table
+        if reason and status_val == "rejected":
+            try:
+                supabase.table("dtr_remarks").insert({
+                    "dtr_id": log_id,
+                    "sender_name": "supervisor",
+                    "sender_role": "supervisor",
+                    "message": f"REJECTED: {reason}"
+                }).execute()
+            except Exception as remark_err:
+                print("Failed to save to dtr_remarks:", str(remark_err))
+
+        return {
+            "status": "success",
+            "updated_status": status_val,
+            "rejection_reason": reason,
+            "data": res.data
+        }
+    except Exception as e:
+        print("UPDATE ERROR:", str(e))
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/dtr/{log_id}/messages")
+async def add_dtr_message(log_id: int, payload: MessagePayload):
+    if not supabase:
+        raise HTTPException(status_code=500, detail="Database client not configured")
+
+    try:
+        dtr = supabase.table("dtr_logs").select("messages").eq("id", log_id).single().execute()
+        existing_messages = (dtr.data.get("messages") or []) if dtr.data else []
+
+        new_msg = {
+            "sender": payload.sender,
+            "message": payload.message,
+            "timestamp": datetime.now().strftime("%I:%M %p")
+        }
+        existing_messages.append(new_msg)
+
+        supabase.table("dtr_logs").update({"messages": existing_messages}).eq("id", log_id).execute()
+        return {"message": "Message sent", "messages": existing_messages}
+    except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 
