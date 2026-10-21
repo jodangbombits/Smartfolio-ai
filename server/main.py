@@ -492,22 +492,41 @@ async def get_dtr_logs(user_id: int):
     if not supabase:
         raise HTTPException(status_code=500, detail="Database client not configured")
     try:
+        # 1. Kunin ang logs ng student
         res = supabase.table("dtr_logs").select("*").eq("user_id", user_id).order("id", desc=True).execute()
         logs = res.data or []
 
+        # 2. Para sa bawat log, kunin ang lahat ng kaugnay na messages mula sa dtr_remarks table
         for log in logs:
             log_id = log.get("id")
             if log_id:
                 try:
-                    remarks_res = supabase.table("dtr_remarks").select("*").eq("dtr_id", log_id).order("id", desc=True).limit(1).execute()
-                    if remarks_res.data and len(remarks_res.data) > 0:
-                        latest_remark = remarks_res.data[0].get("message", "")
-                        clean_remark = latest_remark.replace("REJECTED:", "").strip()
-                        log["remarks"] = clean_remark
+                    remarks_res = supabase.table("dtr_remarks").select("*").eq("dtr_id", log_id).order("id", asc=True).execute()
+                    remarks_data = remarks_res.data or []
+                    
+                    formatted_msgs = []
+                    for r in remarks_data:
+                        raw_msg = r.get("message", "")
+                        clean_msg = raw_msg.replace("REJECTED:", "").strip()
+                        sender_role = (r.get("sender_role") or r.get("sender_name") or "supervisor").lower()
+                        
+                        formatted_msgs.append({
+                            "id": r.get("id"),
+                            "sender": sender_role,
+                            "message": clean_msg,
+                            "timestamp": str(r.get("created_at") or "")[:16].replace("T", " ")
+                        })
+                    
+                    log["messages"] = formatted_msgs
+
+                    # Kung may pinakabagong remark na pangkalahatan, itabi bilang remarks/rejection_reason
+                    if formatted_msgs:
+                        latest_clean = formatted_msgs[-1]["message"]
+                        log["remarks"] = latest_clean
                         if not log.get("rejection_reason"):
-                            log["rejection_reason"] = clean_remark
+                            log["rejection_reason"] = latest_clean
                 except Exception as r_err:
-                    print("Error fetching remarks:", str(r_err))
+                    print("Error fetching remarks for log:", log_id, str(r_err))
 
         return logs
     except Exception as e:
@@ -564,38 +583,33 @@ async def add_dtr_message(log_id: int, payload: MessagePayload):
         raise HTTPException(status_code=500, detail="Database client not configured")
 
     try:
-        new_msg = {
-            "sender": payload.sender,
-            "message": payload.message,
-            "timestamp": datetime.now().strftime("%I:%M %p")
+        # I-insert sa dtr_remarks table
+        remark_data = {
+            "dtr_id": int(log_id),
+            "sender_name": payload.sender,
+            "sender_role": payload.sender,
+            "message": payload.message
         }
-
-        # 1. Subukang i-save sa dtr_remarks table para sa Supervisor
-        try:
-            supabase.table("dtr_remarks").insert({
-                "dtr_id": log_id,
-                "sender_name": payload.sender,
-                "sender_role": payload.sender,
-                "message": payload.message
-            }).execute()
-        except Exception as r_err:
-            print("Failed insertion to dtr_remarks:", str(r_err))
-
-        # 2. Subukang i-update ang messages JSON column sa dtr_logs (kung meron)
+        
+        res = supabase.table("dtr_remarks").insert(remark_data).execute()
+        
+        # Subukan ding irepetisyon sa dtr_logs messages column kung sakaling pinalawak ang schema
         try:
             dtr = supabase.table("dtr_logs").select("messages").eq("id", log_id).single().execute()
             existing_messages = (dtr.data.get("messages") or []) if dtr.data else []
-            existing_messages.append(new_msg)
+            existing_messages.append({
+                "sender": payload.sender,
+                "message": payload.message,
+                "timestamp": datetime.now().strftime("%I:%M %p")
+            })
             supabase.table("dtr_logs").update({"messages": existing_messages}).eq("id", log_id).execute()
-            return {"status": "success", "message": "Message sent", "messages": existing_messages}
-        except Exception as d_err:
-            print("Failed dtr_logs messages JSON update:", str(d_err))
+        except Exception:
+            pass
 
-        return {"status": "success", "message": "Message sent", "messages": [new_msg]}
+        return {"status": "success", "message": "Message saved to dtr_remarks", "data": res.data}
     except Exception as e:
         print("ADD MESSAGE ERROR:", str(e))
         raise HTTPException(status_code=500, detail=str(e))
-
 # =====================================================================
 # INTERN PROFILES ENDPOINTS
 # =====================================================================
