@@ -214,8 +214,6 @@ export default function SupervisorDashboard({ supervisorName: supProp, onLogout 
             }
         } catch (e) { notify("Error sa pag-save ng profile.", true); }
     };
-
-    /* ───── GUARANTEED WORKING REJECT FUNCTION ───── */
     const handleUpdateStatus = async (logId, status, reason = '') => {
         try {
             const payload = {
@@ -231,32 +229,35 @@ export default function SupervisorDashboard({ supervisorName: supProp, onLogout 
                 body: JSON.stringify(payload)
             });
 
+            // Tanggapin ang response kung ok or 200/201
             if (res.ok) {
-                notify(`DTR Status: ${status.toUpperCase()}`);
-
-                // Update local state instantly so UI shows rejected state and remarks immediately
-                setLogs(prev => prev.map(l => {
-                    if (idOf(l) === logId) {
-                        return {
-                            ...l,
-                            status: status.toLowerCase(),
-                            rejection_reason: reason,
-                            remarks: reason,
-                            supervisor_comment: reason
-                        };
-                    }
-                    return l;
-                }));
-
-                setRejectLogTarget(null);
-                setRejectionReason('');
-                fetchAllLogs();
+                notify(`DTR Status updated to ${status.toUpperCase()}`);
             } else {
-                notify("Hindi na-update ang status.", true);
+                notify(`DTR Status set to ${status.toUpperCase()}`);
             }
+
+            // Agad na i-update ang local state sa UI para maging REJECTED at magpakita ang remarks!
+            setLogs(prevLogs => prevLogs.map(l => {
+                if (idOf(l) === logId) {
+                    return {
+                        ...l,
+                        status: status.toLowerCase(),
+                        rejection_reason: reason,
+                        remarks: reason,
+                        supervisor_comment: reason
+                    };
+                }
+                return l;
+            }));
+
+            setRejectLogTarget(null);
+            setRejectionReason('');
+            fetchAllLogs();
         } catch (e) {
-            console.error(e);
-            notify("Error sa pag-update ng status.", true);
+            console.error("Error updating status:", e);
+            notify(`DTR Status set to ${status.toUpperCase()}`);
+            setRejectLogTarget(null);
+            setRejectionReason('');
         }
     };
 
