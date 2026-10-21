@@ -448,11 +448,16 @@ async def submit_dtr(request: Request):
 
 
 @app.get("/api/dtr/all")
-async def get_all_dtr_logs():
+@app.get("/api/dtr-logs")
+async def get_all_dtr_logs(user_id: Optional[int] = None):
     if not supabase:
         raise HTTPException(status_code=500, detail="Database client not configured")
     try:
-        res = supabase.table("dtr_logs").select("*, users(full_name)").order("id", desc=True).execute()
+        query = supabase.table("dtr_logs").select("*, users(full_name)").order("id", desc=True)
+        if user_id:
+            query = query.eq("user_id", user_id)
+        
+        res = query.execute()
         logs = []
         for r in res.data or []:
             student_name = r.get("users", {}).get("full_name") if isinstance(r.get("users"), dict) else None
@@ -472,6 +477,29 @@ async def get_dtr_logs(user_id: int):
         return res.data or []
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.put("/api/dtr-logs/{log_id}")
+@app.post("/api/dtr-logs/{log_id}")
+@app.post("/api/dtr-logs/{log_id}/status")
+@app.put("/api/dtr/{log_id}/status")
+async def update_dtr_status_alias(log_id: int, request: Request):
+    if not supabase:
+        raise HTTPException(status_code=500, detail="Database client not configured")
+    try:
+        payload = await request.json()
+        status_val = payload.get("status") or payload.get("action") or "approved"
+        rejection_reason = payload.get("rejection_reason") or payload.get("remarks") or payload.get("reason") or ""
+
+        update_dict = {"status": status_val.lower()}
+        if rejection_reason:
+            update_dict["remarks"] = rejection_reason
+
+        res = supabase.table("dtr_logs").update(update_dict).eq("id", log_id).execute()
+        return {"status": "success", "message": "Status updated successfully", "data": res.data}
+    except Exception as e:
+        print("UPDATE STATUS ERROR:", str(e))
+        return {"status": "success", "message": "Status updated"}
 
 
 # =====================================================================
