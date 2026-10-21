@@ -359,7 +359,7 @@ export default function StudentDashboard({ studentName: studentNameProp = 'Stude
         e.preventDefault();
         const hours = calcHours(timeIn, timeOut);
         if (hours <= 0) { notify('Mali ang oras. Siguraduhing tama ang Time In at Time Out.', true); return; }
-
+        
         setIsSubmitting(true);
         try {
             let proofUrl = existingProofUrl;
@@ -372,15 +372,15 @@ export default function StudentDashboard({ studentName: studentNameProp = 'Stude
                 proofUrl = d.proof_url || d.url || '';
             }
 
-            const payload = {
-                user_id: Number(currentUserId),
+            const payload = { 
+                user_id: Number(currentUserId), 
                 student_name: studentName,
-                log_date: logDate,
-                time_in: timeIn,
-                time_out: timeOut,
-                rendered_today: hours,
+                log_date: logDate, 
+                time_in: timeIn, 
+                time_out: timeOut, 
+                rendered_today: hours, 
                 accomplishment: accomplishment,
-                raw_notes: accomplishment,
+                raw_notes: accomplishment, 
                 proof_url: proofUrl,
                 status: 'pending' // Automatically resets status to pending on submit/resubmit
             };
@@ -389,16 +389,16 @@ export default function StudentDashboard({ studentName: studentNameProp = 'Stude
                 payload.dtr_id = idOf(resubmitTargetLog);
             }
 
-            const res = await fetch(`${API_BASE_URL}/api/dtr/submit`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(payload)
+            const res = await fetch(`${API_BASE_URL}/api/dtr/submit`, { 
+                method: 'POST', 
+                headers: { 'Content-Type': 'application/json' }, 
+                body: JSON.stringify(payload) 
             });
 
             if (res.ok) {
                 notify(resubmitTargetLog ? 'Na-resubmit na ang DTR mo at naka-PENDING na ulit!' : 'Na-submit na ang DTR!');
-                setIsSubmitModalOpen(false);
-                setResubmitTargetLog(null);
+                setIsSubmitModalOpen(false); 
+                setResubmitTargetLog(null); 
                 setAccomplishment('');
                 setProofFile(null);
                 fetchDTRLogs(); // Instant refresh of student DTR logs
@@ -406,11 +406,11 @@ export default function StudentDashboard({ studentName: studentNameProp = 'Stude
                 const err = await res.json().catch(() => ({}));
                 notify('Hindi na-submit: ' + (err.detail || 'Subukang muli.'), true);
             }
-        } catch (err) {
-            console.error(err);
-            notify('Hindi maka-connect sa server. Naka-on ba ang backend?', true);
-        } finally {
-            setIsSubmitting(false);
+        } catch (err) { 
+            console.error(err); 
+            notify('Hindi maka-connect sa server. Naka-on ba ang backend?', true); 
+        } finally { 
+            setIsSubmitting(false); 
         }
     };
 
@@ -853,8 +853,17 @@ export default function StudentDashboard({ studentName: studentNameProp = 'Stude
 
                         {resubmitTargetLog && (
                             <div style={{ background: 'rgba(239,68,68,.1)', border: '1px solid rgba(239,68,68,.35)', borderRadius: 10, padding: 12, marginBottom: 14 }}>
-                                <div style={{ color: '#f87171', fontWeight: 700, fontSize: 11, display: 'flex', gap: 6, alignItems: 'center', marginBottom: 4 }}><AlertCircle size={14} /> SUPERVISOR REMARK / REJECTION REASON</div>
-                                <div style={{ color: '#fca5a5', lineHeight: 1.5 }}>{resubmitTargetLog.remarks || resubmitTargetLog.supervisor_comment || resubmitTargetLog.rejection_reason || 'Pakiayos ang mga detalye o mag-upload ng bagong proof.'}</div>
+                                <div style={{ color: '#f87171', fontWeight: 700, fontSize: 11, display: 'flex', gap: 6, alignItems: 'center', marginBottom: 4 }}>
+                                    <AlertCircle size={14} /> SUPERVISOR REMARK / REJECTION REASON
+                                </div>
+                                <div style={{ color: '#fca5a5', lineHeight: 1.5 }}>
+                                    {/* Lalabas na dito ang eksaktong dahilan na itinype ni Supervisor */}
+                                    {resubmitTargetLog.rejection_reason ||
+                                        resubmitTargetLog.remarks ||
+                                        resubmitTargetLog.supervisor_comment ||
+                                        resubmitTargetLog.rejectionReason ||
+                                        'Walang inilagay na dahilan ang Supervisor.'}
+                                </div>
                             </div>
                         )}
 

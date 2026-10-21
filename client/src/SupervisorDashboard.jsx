@@ -223,28 +223,32 @@ export default function SupervisorDashboard({ supervisorName: supProp, onLogout 
                 body: JSON.stringify({
                     status: status.toLowerCase(),
                     rejection_reason: reason,
-                    remarks: reason
+                    remarks: reason,
+                    supervisor_comment: reason
                 })
             });
 
             if (res.ok) {
-                notify(`DTR Status updated to: ${status.toUpperCase()}`);
-                // Instant local state update para maging realtime ang visual sa table
-                setLogs(prevLogs => prevLogs.map(l => {
+                notify(`DTR Status: ${status.toUpperCase()}`);
+                // Update local state instantly so the UI reflects the exact remark
+                setLogs(prev => prev.map(l => {
                     if (idOf(l) === logId) {
-                        return { ...l, status: status.toLowerCase(), rejection_reason: reason };
+                        return {
+                            ...l,
+                            status: status.toLowerCase(),
+                            rejection_reason: reason,
+                            remarks: reason,
+                            supervisor_comment: reason
+                        };
                     }
                     return l;
                 }));
                 setRejectLogTarget(null);
                 setRejectionReason('');
-                fetchAllLogs(); // Fetch fresh data from backend
-            } else {
-                notify("Hindi ma-update ang DTR status.", true);
+                fetchAllLogs();
             }
         } catch (e) {
-            console.error(e);
-            notify("Error sa pag-update ng DTR status.", true);
+            notify("Error sa pag-update ng status.", true);
         }
     };
     const stats = useMemo(() => {
