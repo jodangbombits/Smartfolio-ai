@@ -547,9 +547,6 @@ async def get_intern_profile(identifier: str):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-# =====================================================================
-# DIRECT FRONTEND COMPATIBILITY ENDPOINTS (/api/interns/{id}/profile)
-# =====================================================================
 @app.get("/api/interns/{user_id}/profile")
 async def get_intern_profile_by_id(user_id: int):
     if not supabase:
@@ -561,18 +558,21 @@ async def get_intern_profile_by_id(user_id: int):
 
         raw_row = res.data[0]
         parsed_data = {}
-        if isinstance(raw_row.get("data"), str):
+        data_val = raw_row.get("data")
+        
+        if isinstance(data_val, str):
             try:
-                parsed_data = json.loads(raw_row["data"])
+                parsed_data = json.loads(data_val)
             except Exception:
                 parsed_data = {}
-        elif isinstance(raw_row.get("data"), dict):
-            parsed_data = raw_row["data"]
+        elif isinstance(data_val, dict):
+            parsed_data = data_val
 
         parsed_data["user_id"] = raw_row.get("user_id")
         return parsed_data
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        print("GET PROFILE ERROR:", str(e))
+        return {}
 
 
 @app.post("/api/interns/{user_id}/profile")
@@ -581,27 +581,29 @@ async def save_intern_profile_by_id(user_id: int, payload: InternProfileSchema):
     if not supabase:
         raise HTTPException(status_code=500, detail="Database client not configured")
     try:
-        # Kunin ang JSON representation mula sa schema
-        data_dict = payload.model_dump(exclude_unset=True) if hasattr(payload, "model_dump") else payload.dict(exclude_unset=True)
+        data_dict = payload.dict(exclude_unset=True)
         data_dict["user_id"] = user_id
 
-        # I-serialize sa JSON string para sa Supabase 'data' column
-        json_string_data = json.dumps(data_dict)
+        # I-serialize sa string at i-ensure na walang circular objects
+        json_str = json.dumps(data_dict, default=str)
 
-        record = {
-            "user_id": user_id,
-            "data": json_string_data
-        }
-
-        # Tingnan kung may umiiral nang profile ang user_id
+        # 1. Subukang i-check gamit ang user_id
         existing = supabase.table("intern_profiles").select("id").eq("user_id", user_id).execute()
 
         if existing.data and len(existing.data) > 0:
-            res = supabase.table("intern_profiles").update(record).eq("user_id", user_id).execute()
+            res = supabase.table("intern_profiles").update({"data": json_str}).eq("user_id", user_id).execute()
         else:
-            res = supabase.table("intern_profiles").insert(record).execute()
+            # 2. Kung bagong insert, gagamit muna tayo ng safe insert logic
+            res = supabase.table("intern_profiles").insert({"user_id": user_id, "data": json_str}).execute()
 
         return {"message": "Profile saved successfully", "data": res.data}
     except Exception as e:
-        logging.error(f"Save Profile Error: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
+        error_msg = str(e)
+        print("SAVE ERROR LOG:", error_msg)
+        
+        # Kung sakaling nag-fail sa Foreign Key, i-fallback natin sa pag-upsert sa 'data' lang
+        try:
+            res = supabase.table("intern_profiles").upsert({"user_id": user_id, "data": json.dumps(data_dict, default=str)}).execute()
+            return {"message": "Profile saved via fallback", "data": res.data}
+        except Exception:
+            raise HTTPException(status_code=500, detail=f"Save failed: {error_msg}")
