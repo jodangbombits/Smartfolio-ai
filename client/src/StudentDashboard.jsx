@@ -260,30 +260,50 @@ export default function StudentDashboard({ studentName: studentNameProp = 'Stude
 
     const notify = (msg, err = false) => { setToast({ msg, err }); setTimeout(() => setToast(null), 3200); };
 
-    /* ── data ── */
-    const fetchDTRLogs = useCallback(async () => {
-        if (!currentUserId) return;
-        try {
-            const res = await fetch(`${API_BASE_URL}/api/dtr/${currentUserId}`);
-            if (!res.ok) return;
-            const data = await res.json();
-            const list = Array.isArray(data) ? data : (data.logs || []);
-            setLogs(list);
-            setActiveChatLog(prev => {
-                if (!prev) return null;
-                return list.find(l => idOf(l) === idOf(prev)) || prev;
-            });
-        } catch (e) { console.error('Error fetching DTR logs:', e); }
-    }, [currentUserId]);
-
     // Profile + MOA record na sinaave ng Supervisor
     const fetchInternProfile = useCallback(async () => {
         if (!currentUserId) return;
         try {
             const res = await fetch(`${API_BASE_URL}/api/interns/${currentUserId}/profile`);
             if (res.ok) {
-                const data = await res.json();
-                setInternProfile(prev => (JSON.stringify(prev) === JSON.stringify(data || null) ? prev : (data || null)));
+                const rawData = await res.json();
+
+                // Kung sakaling naka-nest sa inside 'data' property o JSON string
+                let profileObj = rawData;
+                if (rawData && rawData.data) {
+                    if (typeof rawData.data === 'string') {
+                        try { profileObj = JSON.parse(rawData.data); } catch (e) { profileObj = rawData; }
+                    } else if (typeof rawData.data === 'object') {
+                        profileObj = { ...rawData, ...rawData.data };
+                    }
+                }
+
+                // Normalization para sigurado ang rendering sa UI
+                const normalized = {
+                    ...profileObj,
+                    school: profileObj.school || profileObj.p_school || "",
+                    course: profileObj.course || profileObj.p_course || "",
+                    year_level: profileObj.year_level || profileObj.yearLevel || profileObj.p_year_level || "",
+                    adviser: profileObj.adviser || profileObj.school_coordinator || profileObj.p_adviser || "",
+                    contact: profileObj.contact || profileObj.contact_number || profileObj.p_contact || "",
+
+                    host_company: profileObj.host_company || profileObj.hostCompany || profileObj.company || "",
+                    department: profileObj.department || profileObj.dept || "",
+                    start_date: profileObj.start_date || profileObj.startDate || "",
+                    end_date: profileObj.end_date || profileObj.endDate || "",
+                    required_hours: profileObj.required_hours || profileObj.requiredHours || 500,
+
+                    moa_signed: Boolean(profileObj.moa_signed || profileObj.moaSigned),
+                    endorsement_letter: Boolean(profileObj.endorsement_letter || profileObj.endorsementLetter),
+                    parent_consent: Boolean(profileObj.parent_consent || profileObj.parentConsent),
+                    medical_clearance: Boolean(profileObj.medical_clearance || profileObj.medicalClearance),
+
+                    moa_ref_no: profileObj.moa_ref_no || profileObj.moaRefNo || "",
+                    moa_date_signed: profileObj.moa_date_signed || profileObj.date_signed || "",
+                    moa_valid_until: profileObj.moa_valid_until || profileObj.valid_until || ""
+                };
+
+                setInternProfile(prev => (JSON.stringify(prev) === JSON.stringify(normalized) ? prev : normalized));
             }
         } catch (e) {
             console.error('Error fetching intern profile:', e);
