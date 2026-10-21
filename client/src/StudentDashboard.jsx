@@ -276,17 +276,20 @@ export default function StudentDashboard({ studentName: studentNameProp = 'Stude
         } catch (e) { console.error('Error fetching DTR logs:', e); }
     }, [currentUserId]);
 
-    // Profile + MOA record na sinave ng Supervisor (parehong source: GET /api/interns)
+    // Profile + MOA record na sinaave ng Supervisor
     const fetchInternProfile = useCallback(async () => {
+        if (!currentUserId) return;
         try {
-            const res = await fetch(`${API_BASE_URL}/api/interns`);
+            const res = await fetch(`${API_BASE_URL}/api/interns/${currentUserId}/profile`);
             if (res.ok) {
                 const data = await res.json();
-                const found = Array.isArray(data) ? data.find(i => Number(i.id) === Number(currentUserId)) : null;
-                setInternProfile(prev => (JSON.stringify(prev) === JSON.stringify(found || null) ? prev : (found || null)));
+                setInternProfile(prev => (JSON.stringify(prev) === JSON.stringify(data || null) ? prev : (data || null)));
             }
-        } catch (e) { console.error('Error fetching intern profile:', e); }
-        finally { setProfileTried(true); }
+        } catch (e) {
+            console.error('Error fetching intern profile:', e);
+        } finally {
+            setProfileTried(true);
+        }
     }, [currentUserId]);
 
     useEffect(() => {
