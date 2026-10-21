@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import {
     Users, FileText, CheckCircle2, XCircle, MessageSquare, Send, Eye, Paperclip,
     Search, Download, Save, AlertCircle, Shield, RotateCcw, UserCheck, CalendarDays,
-    Building2, GraduationCap, CheckSquare, LogOut, Zap
+    Building2, GraduationCap, CheckSquare, LogOut, Zap, LayoutDashboard, Bot, Sparkles, User, Plus
 } from 'lucide-react';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || "http://127.0.0.1:8000";
@@ -14,7 +14,7 @@ const statusOf = (l) => (l.status || 'pending').toLowerCase();
 const msgText = (m) => m.message || m.text || m.remark || m.content || '';
 const fullUrl = (u) => !u ? null : /^https?:\/\//i.test(u) ? u : `${API_BASE_URL}${u.startsWith('/') ? '' : '/'}${u}`;
 
-/* ───────────── Styles ───────────── */
+/* ───────────── Original Cyberpunk Styles ───────────── */
 const CSS = `
 @import url('https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap');
 .sf{--cy:#22d3ee;--vi:#a78bfa;--ok:#34d399;--warn:#facc15;--bad:#f87171;--mut:#64748b;--line:rgba(34,211,238,.3);
@@ -30,44 +30,68 @@ const CSS = `
 .nav{display:flex;align-items:center;gap:10px;width:100%;padding:10px 12px;border-radius:10px;border:1px solid transparent;background:none;color:#94a3b8;cursor:pointer;font-size:12.5px;text-align:left}
 .nav:hover{color:#e2e8f0;background:rgba(34,211,238,.06)}
 .nav.on{color:var(--cy);border-color:var(--line);background:rgba(34,211,238,.1);box-shadow:0 0 16px rgba(34,211,238,.18)}
+.nav .bd{margin-left:auto;background:#ef4444;color:#fff;border-radius:99px;font-size:10px;font-weight:700;padding:1px 7px}
 .sf-out{margin-top:auto;color:var(--bad);border-color:rgba(248,113,113,.35);background:rgba(248,113,113,.07)}
 .sf-main{margin-left:250px;padding:18px 28px 40px}
 .top{display:flex;justify-content:space-between;align-items:center;gap:12px;font-size:11px;color:#94a3b8;margin-bottom:18px}
-.dot{display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--ok);box-shadow:0 0 8px var(--ok);margin-right:8px}
+.dot{display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--ok);box-shadow:0 0 8px var(--ok);margin-right:8px;animation:pl 2s infinite}
+@keyframes pl{50%{opacity:.35}}
+.pg{display:flex;justify-content:space-between;align-items:flex-end;gap:16px;flex-wrap:wrap;margin-bottom:18px}
 .pg h1{font-size:30px;letter-spacing:.06em;text-transform:uppercase;color:#f8fafc;text-shadow:0 0 18px rgba(34,211,238,.35)}
 .pg p{margin:6px 0 0;font-size:11px;color:var(--mut);letter-spacing:.08em}
-.card{--ac:#22d3ee;position:relative;background:linear-gradient(160deg,rgba(15,23,42,.78),rgba(9,14,34,.78));border:1px solid color-mix(in srgb,var(--ac) 35%,transparent);border-radius:14px;padding:18px;box-shadow:0 0 24px color-mix(in srgb,var(--ac) 10%,transparent)}
+.card{--ac:#22d3ee;position:relative;background:linear-gradient(160deg,rgba(15,23,42,.78),rgba(9,14,34,.78));border:1px solid color-mix(in srgb,var(--ac) 35%,transparent);border-radius:14px;padding:18px;box-shadow:0 0 24px color-mix(in srgb,var(--ac) 10%,transparent),inset 0 0 26px color-mix(in srgb,var(--ac) 4%,transparent)}
+.card::before,.card::after{content:'';position:absolute;bottom:-1px;width:20px;height:20px;border-bottom:2px solid var(--ac);pointer-events:none}
+.card::before{left:-1px;border-left:2px solid var(--ac);border-bottom-left-radius:14px}
+.card::after{right:-1px;border-right:2px solid var(--ac);border-bottom-right-radius:14px}
 .lbl{font-size:10.5px;letter-spacing:.14em;color:var(--mut);text-transform:uppercase}
 .big{font-family:'Chakra Petch',sans-serif;font-size:38px;font-weight:700;line-height:1.1;margin:8px 0 4px}
 .g4{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:16px}
 .g2{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:16px}
-.btn{display:inline-flex;align-items:center;gap:6px;padding:8px 14px;border-radius:99px;border:1px solid var(--line);background:rgba(34,211,238,.08);color:var(--cy);font-size:11.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;cursor:pointer}
+.gt{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:14px}
+.sh{display:flex;align-items:center;gap:8px;font-family:'Chakra Petch',sans-serif;font-weight:600;letter-spacing:.1em;text-transform:uppercase;font-size:13.5px;color:#f1f5f9;margin-bottom:12px}
+.sh svg{color:var(--cy)}
+.btn{display:inline-flex;align-items:center;gap:6px;padding:8px 14px;border-radius:99px;border:1px solid var(--line);background:rgba(34,211,238,.08);color:var(--cy);font-size:11.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;cursor:pointer;text-decoration:none}
 .btn:hover{background:rgba(34,211,238,.18)}
 .btn.solid{background:linear-gradient(90deg,#0891b2,#0e7490);color:#fff;border-color:#22d3ee;box-shadow:0 0 18px rgba(34,211,238,.4)}
 .btn.ok{color:var(--ok);border-color:rgba(52,211,153,.4);background:rgba(52,211,153,.1)}
 .btn.bad{color:var(--bad);border-color:rgba(248,113,113,.45);background:rgba(239,68,68,.12)}
 .btn.sm{padding:5px 10px;font-size:10.5px}
 .pill{padding:5px 12px;border-radius:99px;border:1px solid var(--line);background:none;color:#94a3b8;font-size:10.5px;cursor:pointer}
-.pill.on{color:var(--cy);background:rgba(34,211,238,.14)}
+.pill.on{color:var(--cy);background:rgba(34,211,238,.14);box-shadow:0 0 12px rgba(34,211,238,.25)}
 .chip{display:inline-block;padding:3px 10px;border-radius:6px;font-size:10px;font-weight:700;letter-spacing:.08em;border:1px solid}
 .chip.ok{color:var(--ok);background:rgba(52,211,153,.1);border-color:rgba(52,211,153,.5)}
 .chip.warn{color:var(--warn);background:rgba(250,204,21,.1);border-color:rgba(250,204,21,.5)}
 .chip.bad{color:var(--bad);background:rgba(248,113,113,.1);border-color:rgba(248,113,113,.5)}
+.srch{display:flex;align-items:center;gap:8px;padding:7px 12px;border:1px solid var(--line);border-radius:10px;background:rgba(5,8,22,.6);min-width:230px}
+.srch input{background:none;border:0;outline:0;color:#e2e8f0;font:inherit;width:100%}
 .tbl{width:100%;border-collapse:collapse;text-align:left}
-.tbl th{padding:10px 12px;font-size:10px;color:var(--mut);border-bottom:1px solid rgba(34,211,238,.18)}
+.tbl th{padding:10px 12px;font-size:10px;color:var(--mut);border-bottom:1px solid rgba(34,211,238,.18);letter-spacing:.14em;text-transform:uppercase}
 .tbl td{padding:12px;border-bottom:1px solid rgba(255,255,255,.05);vertical-align:middle}
-.in{width:100%;background:rgba(15,23,42,.8);border:1px solid var(--line);border-radius:9px;padding:9px 10px;color:#fff;font:inherit;outline:0}
-.toast{position:fixed;right:20px;bottom:20px;z-index:400;padding:12px 16px;border-radius:10px;background:#0a1020;border:1px solid var(--ok);color:var(--ok)}
-.toast.err{border-color:var(--bad);color:var(--bad)}
+.act{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+.cnt{background:#38bdf8;color:#082f49;border-radius:99px;padding:0 6px;font-size:10px;font-weight:800}
+.in{width:100%;background:rgba(15,23,42,.8);border:1px solid var(--line);border-radius:9px;padding:9px 10px;color:#fff;font:inherit;outline:0;color-scheme:dark}
+.toast{position:fixed;right:20px;bottom:20px;z-index:400;padding:12px 16px;border-radius:10px;background:#0a1020;border:1px solid var(--ok);color:var(--ok);box-shadow:0 0 24px rgba(52,211,153,.3)}
+.toast.err{border-color:var(--bad);color:var(--bad);box-shadow:0 0 24px rgba(248,113,113,.3)}
 .ovl{position:fixed;inset:0;background:rgba(2,6,18,.8);backdrop-filter:blur(6px);display:grid;place-items:center;z-index:200;padding:16px}
-.modal{width:min(520px,100%);max-height:92vh;overflow:auto;background:#0a1020;border:1px solid var(--line);border-radius:16px;padding:22px}
+.modal{width:min(520px,100%);max-height:92vh;overflow:auto;background:#0a1020;border:1px solid var(--line);border-radius:16px;padding:22px;box-shadow:0 0 50px rgba(34,211,238,.18)}
+.bub{max-width:85%;padding:9px 12px;font-size:12.5px;line-height:1.5;word-break:break-word;color:#fff}
+.bub.me{background:#0e7490;border-radius:14px 14px 3px 14px}
+.bub.sup{background:rgba(239,68,68,.16);border:1px solid rgba(239,68,68,.35);border-radius:14px 14px 14px 3px}
 `;
 
-export default function SupervisorDashboard({ supervisorName = "Supervisor", onLogout }) {
+const NAV = [
+    { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
+    { id: 'interns', label: 'All Interns', icon: Users },
+    { id: 'dtr', label: 'DTR Approval Center', icon: FileText },
+    { id: 'messages', label: 'Messages', icon: MessageSquare },
+    { id: 'profile', label: 'Intern Profile & MOA', icon: UserCheck }
+];
+
+export default function SupervisorDashboard({ supervisorName = "Jodilyn P. Bombita", onLogout }) {
     const [tab, setTab] = useState('dtr');
     const [interns, setInterns] = useState([]);
     const [logs, setLogs] = useState([]);
-    const [selectedStudentId, setSelectedStudentId] = useState(2); // Default Friesy Ferry
+    const [selectedStudentId, setSelectedStudentId] = useState(2);
     const [statusFilter, setStatusFilter] = useState('all');
     const [search, setSearch] = useState('');
     const [toast, setToast] = useState(null);
@@ -80,11 +104,12 @@ export default function SupervisorDashboard({ supervisorName = "Supervisor", onL
         moa_date_signed: '', moa_valid_until: ''
     });
 
-    // Chat modal states
+    // Chat / Reject Modal states
     const [activeChatLog, setActiveChatLog] = useState(null);
     const [replyText, setReplyText] = useState('');
     const [rejectLogTarget, setRejectLogTarget] = useState(null);
     const [rejectionReason, setRejectionReason] = useState('');
+    const chatEndRef = useRef(null);
 
     const notify = (msg, err = false) => { setToast({ msg, err }); setTimeout(() => setToast(null), 3200); };
 
@@ -202,6 +227,20 @@ export default function SupervisorDashboard({ supervisorName = "Supervisor", onL
         }
     };
 
+    // Chat reply handler
+    const handleSendReply = async (e) => {
+        e.preventDefault();
+        if (!replyText.trim() || !activeChatLog) return;
+        const logId = idOf(activeChatLog);
+        const payload = { sender: 'supervisor', message: replyText.trim(), timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) };
+        setActiveChatLog(prev => prev ? { ...prev, messages: [...(prev.messages || []), payload] } : null);
+        setReplyText('');
+        try {
+            await fetch(`${API_BASE_URL}/api/dtr/${logId}/messages`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+            fetchAllLogs();
+        } catch (err) { console.error('Error sending chat reply:', err); }
+    };
+
     // Derived statistics
     const stats = useMemo(() => {
         const pending = logs.filter(l => statusOf(l) === 'pending');
@@ -228,14 +267,17 @@ export default function SupervisorDashboard({ supervisorName = "Supervisor", onL
             <aside className="sf-side">
                 <div className="sf-logo"><Shield size={20} /> Supervisor Hub</div>
                 <div className="sf-me">
-                    <div className="av">S</div>
-                    <div>
-                        <div style={{ fontWeight: 700 }}>{supervisorName}</div>
+                    <div className="av">J</div>
+                    <div style={{ minWidth: 0 }}>
+                        <div className="hd" style={{ fontWeight: 700, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{supervisorName}</div>
                         <div style={{ fontSize: 10, color: '#f87171' }}>OJT Supervisor Portal</div>
                     </div>
                 </div>
-                <button className={`nav ${tab === 'dtr' ? 'on' : ''}`} onClick={() => setTab('dtr')}><FileText size={16} /> DTR Approval Center</button>
-                <button className={`nav ${tab === 'profile' ? 'on' : ''}`} onClick={() => setTab('profile')}><UserCheck size={16} /> Intern Profile & MOA</button>
+                {NAV.map(n => (
+                    <button key={n.id} className={`nav ${tab === n.id ? 'on' : ''}`} onClick={() => setTab(n.id)}>
+                        <n.icon size={16} /> {n.label}
+                    </button>
+                ))}
                 <button className="nav sf-out" onClick={onLogout || (() => window.location.reload())}><LogOut size={16} /> Logout</button>
             </aside>
 
@@ -245,6 +287,77 @@ export default function SupervisorDashboard({ supervisorName = "Supervisor", onL
                     <span>TOTAL INTERNS: <b>{interns.length || 4}</b></span>
                 </div>
 
+                {/* DASHBOARD TAB */}
+                {tab === 'dashboard' && (<>
+                    <div className="pg" style={{ marginBottom: 16 }}>
+                        <div><h1>SUPERVISOR DASHBOARD OVERVIEW</h1><p>[ OVERALL INTERNSHIP PROGRESS & STATS ]</p></div>
+                    </div>
+
+                    <div className="g4">
+                        <div className="card">
+                            <div className="lbl">Active Interns</div>
+                            <div className="big" style={{ color: '#22d3ee' }}>{interns.length || 4}</div>
+                        </div>
+                        <div className="card" style={{ '--ac': '#facc15' }}>
+                            <div className="lbl">Pending DTR Review</div>
+                            <div className="big" style={{ color: '#facc15' }}>{stats.pending.length}</div>
+                        </div>
+                        <div className="card" style={{ '--ac': '#34d399' }}>
+                            <div className="lbl">Approved DTR Logs</div>
+                            <div className="big" style={{ color: '#34d399' }}>{stats.approved.length}</div>
+                        </div>
+                        <div className="card" style={{ '--ac': '#f87171' }}>
+                            <div className="lbl">Needs Revision</div>
+                            <div className="big" style={{ color: '#f87171' }}>{stats.rejected.length}</div>
+                        </div>
+                    </div>
+
+                    <div className="card">
+                        <div className="sh"><FileText size={16} /> Recent DTR Submissions</div>
+                        <div style={{ overflowX: 'auto' }}>
+                            <table className="tbl">
+                                <thead><tr><th>Student</th><th>Date</th><th>Hours</th><th>Accomplishments</th><th>Status</th></tr></thead>
+                                <tbody>
+                                    {logs.slice(0, 5).map(l => (
+                                        <tr key={idOf(l)}>
+                                            <td style={{ fontWeight: 700, color: '#f8fafc' }}>{l.student_name || 'Student Intern'}</td>
+                                            <td style={{ color: '#22d3ee' }}>{l.log_date || l.date}</td>
+                                            <td style={{ color: '#38bdf8', fontWeight: 700 }}>{hrsOf(l)} hrs</td>
+                                            <td style={{ color: '#94a3b8' }}>{l.accomplishment || l.raw_notes}</td>
+                                            <td><span className={`chip ${statusOf(l) === 'approved' ? 'ok' : statusOf(l) === 'rejected' ? 'bad' : 'warn'}`}>{statusOf(l).toUpperCase()}</span></td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </>)}
+
+                {/* ALL INTERNS TAB */}
+                {tab === 'interns' && (<>
+                    <div className="pg" style={{ marginBottom: 16 }}>
+                        <div><h1>REGISTERED STUDENT INTERNS</h1><p>[ LISTAHAN NG MGA ESTUDYANTE NA NAKA-REGISTER ]</p></div>
+                    </div>
+                    <div className="gt">
+                        {interns.length === 0 ? <div className="card">Loading interns...</div> : interns.map(i => (
+                            <div key={i.id} className="card" style={{ '--ac': '#a78bfa' }}>
+                                <div style={{ display: 'flex', gap: 12, alignItems: 'center', marginBottom: 10 }}>
+                                    <div className="av" style={{ background: 'linear-gradient(135deg,#0891b2,#22d3ee)' }}>{(i.full_name || i.email).charAt(0).toUpperCase()}</div>
+                                    <div>
+                                        <div style={{ fontWeight: 700, fontSize: 14 }}>{i.full_name || 'Student Intern'}</div>
+                                        <div style={{ fontSize: 11, color: '#22d3ee' }}>{i.email}</div>
+                                    </div>
+                                </div>
+                                <div style={{ fontSize: 11, color: '#64748b' }}>Contact: {i.contact_number || 'N/A'}</div>
+                                <button className="btn sm solid" style={{ marginTop: 12, width: '100%', justifyContent: 'center' }} onClick={() => { setSelectedStudentId(i.id); setTab('profile'); }}>
+                                    <UserCheck size={12} /> Edit Profile & MOA
+                                </button>
+                            </div>
+                        ))}
+                    </div>
+                </>)}
+
+                {/* DTR APPROVAL CENTER TAB */}
                 {tab === 'dtr' && (<>
                     <div className="pg" style={{ marginBottom: 16 }}>
                         <div><h1>DTR APPROVAL & REVISION</h1><p>[ SURIIN AT MAG-APPROVE NG MGA DTR RECORDS ]</p></div>
@@ -295,6 +408,7 @@ export default function SupervisorDashboard({ supervisorName = "Supervisor", onL
                                             <td><div className="act">
                                                 <button className="btn sm ok" onClick={() => handleUpdateDTRStatus(idOf(l), 'approved')}><CheckCircle2 size={12} /> Approve</button>
                                                 <button className="btn sm bad" onClick={() => setRejectLogTarget(l)}><XCircle size={12} /> Reject</button>
+                                                <button className="btn sm" onClick={() => setActiveChatLog(l)}><MessageSquare size={12} /> Chat</button>
                                             </div></td>
                                         </tr>
                                     ))}
@@ -304,6 +418,24 @@ export default function SupervisorDashboard({ supervisorName = "Supervisor", onL
                     </div>
                 </>)}
 
+                {/* MESSAGES TAB */}
+                {tab === 'messages' && (<>
+                    <div className="pg" style={{ marginBottom: 16 }}>
+                        <div><h1>STUDENT THREADS & MESSAGES</h1><p>[ CHAT CONVERSATIONS ON DTR LOGS ]</p></div>
+                    </div>
+                    <div className="gt">
+                        {logs.filter(l => l.messages?.length).length === 0 ? <div className="card">Walang active chat threads.</div> : logs.filter(l => l.messages?.length).map(l => (
+                            <div key={idOf(l)} className="card" style={{ '--ac': '#22d3ee' }}>
+                                <div style={{ fontWeight: 700, color: '#f8fafc', marginBottom: 4 }}>{l.student_name || 'Student Intern'}</div>
+                                <div style={{ fontSize: 11, color: '#a78bfa' }}>DTR Date: {l.log_date || l.date}</div>
+                                <div style={{ margin: '10px 0', fontSize: 11.5, color: '#94a3b8' }}>Last message: {msgText(l.messages[l.messages.length - 1])}</div>
+                                <button className="btn sm solid" onClick={() => setActiveChatLog(l)}><MessageSquare size={12} /> Open Chat Thread</button>
+                            </div>
+                        ))}
+                    </div>
+                </>)}
+
+                {/* INTERN PROFILE & MOA TAB */}
                 {tab === 'profile' && (<>
                     <div className="pg" style={{ marginBottom: 16 }}>
                         <div><h1>INTERN PROFILE & MOA MANAGEMENT</h1><p>[ EDIT AT I-SYNC ANG REQUIREMENTS NG MGA ESTUDYANTE ]</p></div>
@@ -355,6 +487,29 @@ export default function SupervisorDashboard({ supervisorName = "Supervisor", onL
                     </div>
                 </>)}
             </main>
+
+            {/* Chat Modal */}
+            {activeChatLog && (
+                <div className="ovl">
+                    <div className="modal">
+                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 12 }}>
+                            <h3>Chat Thread ({activeChatLog.student_name})</h3>
+                            <button className="btn sm" onClick={() => setActiveChatLog(null)}>X</button>
+                        </div>
+                        <div style={{ maxHeight: 300, overflowY: 'auto', marginBottom: 12, display: 'flex', flexDirection: 'column', gap: 8 }}>
+                            {(activeChatLog.messages || []).map((m, idx) => (
+                                <div key={idx} className={`bub ${m.sender === 'supervisor' ? 'sup' : 'me'}`}>
+                                    <b>{m.sender}:</b> {msgText(m)}
+                                </div>
+                            ))}
+                        </div>
+                        <form onSubmit={handleSendReply} style={{ display: 'flex', gap: 8 }}>
+                            <input className="in" value={replyText} onChange={e => setReplyText(e.target.value)} placeholder="Type a message..." />
+                            <button type="submit" className="btn solid"><Send size={12} /> Send</button>
+                        </form>
+                    </div>
+                </div>
+            )}
 
             {/* Rejection Modal */}
             {rejectLogTarget && (
