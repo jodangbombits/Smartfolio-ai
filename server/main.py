@@ -411,10 +411,6 @@ async def upload_proof(file: UploadFile = File(...)):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Upload failed: {str(e)}")
 
-
-# =====================================================================
-# DTR ENDPOINTS
-# =====================================================================
 @app.post("/api/dtr/submit")
 async def submit_dtr(request: Request):
     if not supabase:
@@ -437,7 +433,7 @@ async def submit_dtr(request: Request):
         except (ValueError, TypeError):
             rendered_today = 8.0
 
-        # Kapag resubmit, pabalikin sa 'pending' at linisin ang rejection fields
+        # Mismong mga umiiral na columns lamang sa dtr_logs table (TINANGGAL NA ANG 'accomplishment' KEY)
         log_data = {
             "user_id": int(user_id) if user_id else None,
             "log_date": log_date,
@@ -445,31 +441,22 @@ async def submit_dtr(request: Request):
             "time_out": time_out,
             "rendered_today": rendered_today,
             "raw_notes": raw_notes,
-            "accomplishment": raw_notes,
             "proof_url": proof_url,
             "status": "pending",
-            "rejection_reason": "",
-            "remarks": ""
+            "rejection_reason": ""
         }
 
         if dtr_id:
-            # I-update ang umiiral na DTR row sa Supabase
+            target_id = int(dtr_id)
             try:
-                res = supabase.table("dtr_logs").update(log_data).eq("id", int(dtr_id)).execute()
-            except Exception:
-                # Fallback kung sakaling walang 'remarks' o 'rejection_reason' column sa schema
-                log_data.pop("remarks", None)
-                try:
-                    res = supabase.table("dtr_logs").update(log_data).eq("id", int(dtr_id)).execute()
-                except Exception:
-                    log_data.pop("rejection_reason", None)
-                    res = supabase.table("dtr_logs").update(log_data).eq("id", int(dtr_id)).execute()
+                res = supabase.table("dtr_logs").update(log_data).eq("id", target_id).execute()
+            except Exception as e1:
+                log_data.pop("rejection_reason", None)
+                res = supabase.table("dtr_logs").update(log_data).eq("id", target_id).execute()
         else:
-            # Mag-insert ng bagong DTR row
             try:
                 res = supabase.table("dtr_logs").insert(log_data).execute()
-            except Exception:
-                log_data.pop("remarks", None)
+            except Exception as e2:
                 log_data.pop("rejection_reason", None)
                 res = supabase.table("dtr_logs").insert(log_data).execute()
 
@@ -505,11 +492,9 @@ async def get_dtr_logs(user_id: int):
     if not supabase:
         raise HTTPException(status_code=500, detail="Database client not configured")
     try:
-        # Kunin ang logs ng student
         res = supabase.table("dtr_logs").select("*").eq("user_id", user_id).order("id", desc=True).execute()
         logs = res.data or []
 
-        # Isama ang pinakabagong remark mula sa dtr_remarks table para sa bawat log
         for log in logs:
             log_id = log.get("id")
             if log_id:
@@ -517,18 +502,16 @@ async def get_dtr_logs(user_id: int):
                     remarks_res = supabase.table("dtr_remarks").select("*").eq("dtr_id", log_id).order("id", desc=True).limit(1).execute()
                     if remarks_res.data and len(remarks_res.data) > 0:
                         latest_remark = remarks_res.data[0].get("message", "")
-                        # Linisin ang prefix kung may 'REJECTED:'
                         clean_remark = latest_remark.replace("REJECTED:", "").strip()
                         log["remarks"] = clean_remark
                         if not log.get("rejection_reason"):
                             log["rejection_reason"] = clean_remark
                 except Exception as r_err:
-                    print("Error fetching remarks for log:", log_id, str(r_err))
+                    print("Error fetching remarks:", str(r_err))
 
         return logs
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
-
 
 @app.post("/api/dtr-logs/{log_id}/status")
 @app.post("/api/dtr/{log_id}/status")
