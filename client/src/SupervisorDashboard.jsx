@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import {
-    Users, FileText, CheckCircle2, XCircle, MessageSquare, Send, Eye, Paperclip,
-    Search, Download, Save, AlertCircle, Shield, RotateCcw, UserCheck, CalendarDays,
-    Building2, GraduationCap, CheckSquare, LogOut, Zap, LayoutDashboard, Bot, Sparkles, User, Plus
+    LayoutDashboard, UserCheck, Bot, MessageSquare, FileText,
+    CheckCircle2, XCircle, Search, Paperclip, Eye, Save, RotateCcw,
+    AlertCircle, Shield, LogOut, Zap, Send, Download, Printer, Plus
 } from 'lucide-react';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || "http://127.0.0.1:8000";
@@ -14,7 +14,7 @@ const statusOf = (l) => (l.status || 'pending').toLowerCase();
 const msgText = (m) => m.message || m.text || m.remark || m.content || '';
 const fullUrl = (u) => !u ? null : /^https?:\/\//i.test(u) ? u : `${API_BASE_URL}${u.startsWith('/') ? '' : '/'}${u}`;
 
-/* ───────────── Original Cyberpunk Styles ───────────── */
+/* ───────────── CSS Styles (Exact Cyberpunk Layout) ───────────── */
 const CSS = `
 @import url('https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap');
 .sf{--cy:#22d3ee;--vi:#a78bfa;--ok:#34d399;--warn:#facc15;--bad:#f87171;--mut:#64748b;--line:rgba(34,211,238,.3);
@@ -26,7 +26,7 @@ const CSS = `
 .sf-side{position:fixed;inset:0 auto 0 0;width:250px;padding:18px 14px;background:rgba(5,8,22,.94);border-right:1px solid rgba(34,211,238,.16);display:flex;flex-direction:column;gap:10px;z-index:50}
 .sf-logo{font-family:'Chakra Petch',sans-serif;font-weight:700;font-size:19px;color:var(--cy);display:flex;gap:8px;align-items:center;padding:4px 6px 10px;text-shadow:0 0 14px rgba(34,211,238,.6)}
 .sf-me{display:flex;gap:10px;align-items:center;padding:10px;border:1px solid var(--line);border-radius:12px;background:rgba(124,58,237,.1)}
-.av{width:34px;height:34px;border-radius:50%;display:grid;place-items:center;font-weight:700;color:#fff;background:linear-gradient(135deg,#e11d48,#f43f5e);flex:none}
+.av{width:34px;height:34px;border-radius:50%;display:grid;place-items:center;font-weight:700;color:#fff;background:linear-gradient(135deg,#0891b2,#22d3ee);flex:none}
 .nav{display:flex;align-items:center;gap:10px;width:100%;padding:10px 12px;border-radius:10px;border:1px solid transparent;background:none;color:#94a3b8;cursor:pointer;font-size:12.5px;text-align:left}
 .nav:hover{color:#e2e8f0;background:rgba(34,211,238,.06)}
 .nav.on{color:var(--cy);border-color:var(--line);background:rgba(34,211,238,.1);box-shadow:0 0 16px rgba(34,211,238,.18)}
@@ -34,8 +34,7 @@ const CSS = `
 .sf-out{margin-top:auto;color:var(--bad);border-color:rgba(248,113,113,.35);background:rgba(248,113,113,.07)}
 .sf-main{margin-left:250px;padding:18px 28px 40px}
 .top{display:flex;justify-content:space-between;align-items:center;gap:12px;font-size:11px;color:#94a3b8;margin-bottom:18px}
-.dot{display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--ok);box-shadow:0 0 8px var(--ok);margin-right:8px;animation:pl 2s infinite}
-@keyframes pl{50%{opacity:.35}}
+.dot{display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--ok);box-shadow:0 0 8px var(--ok);margin-right:8px}
 .pg{display:flex;justify-content:space-between;align-items:flex-end;gap:16px;flex-wrap:wrap;margin-bottom:18px}
 .pg h1{font-size:30px;letter-spacing:.06em;text-transform:uppercase;color:#f8fafc;text-shadow:0 0 18px rgba(34,211,238,.35)}
 .pg p{margin:6px 0 0;font-size:11px;color:var(--mut);letter-spacing:.08em}
@@ -47,6 +46,7 @@ const CSS = `
 .big{font-family:'Chakra Petch',sans-serif;font-size:38px;font-weight:700;line-height:1.1;margin:8px 0 4px}
 .g4{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:16px}
 .g2{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:16px}
+.g3{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:16px}
 .gt{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:14px}
 .sh{display:flex;align-items:center;gap:8px;font-family:'Chakra Petch',sans-serif;font-weight:600;letter-spacing:.1em;text-transform:uppercase;font-size:13.5px;color:#f1f5f9;margin-bottom:12px}
 .sh svg{color:var(--cy)}
@@ -56,20 +56,23 @@ const CSS = `
 .btn.ok{color:var(--ok);border-color:rgba(52,211,153,.4);background:rgba(52,211,153,.1)}
 .btn.bad{color:var(--bad);border-color:rgba(248,113,113,.45);background:rgba(239,68,68,.12)}
 .btn.sm{padding:5px 10px;font-size:10.5px}
-.pill{padding:5px 12px;border-radius:99px;border:1px solid var(--line);background:none;color:#94a3b8;font-size:10.5px;cursor:pointer}
+.pill{padding:5px 12px;border-radius:99px;border:1px solid var(--line);background:none;color:#94a3b8;font-size:10.5px;cursor:pointer;letter-spacing:.06em;text-transform:uppercase}
 .pill.on{color:var(--cy);background:rgba(34,211,238,.14);box-shadow:0 0 12px rgba(34,211,238,.25)}
 .chip{display:inline-block;padding:3px 10px;border-radius:6px;font-size:10px;font-weight:700;letter-spacing:.08em;border:1px solid}
 .chip.ok{color:var(--ok);background:rgba(52,211,153,.1);border-color:rgba(52,211,153,.5)}
 .chip.warn{color:var(--warn);background:rgba(250,204,21,.1);border-color:rgba(250,204,21,.5)}
 .chip.bad{color:var(--bad);background:rgba(248,113,113,.1);border-color:rgba(248,113,113,.5)}
+.chip.muted{color:#94a3b8;background:rgba(71,85,105,.15);border-color:#475569}
 .srch{display:flex;align-items:center;gap:8px;padding:7px 12px;border:1px solid var(--line);border-radius:10px;background:rgba(5,8,22,.6);min-width:230px}
 .srch input{background:none;border:0;outline:0;color:#e2e8f0;font:inherit;width:100%}
 .tbl{width:100%;border-collapse:collapse;text-align:left}
 .tbl th{padding:10px 12px;font-size:10px;color:var(--mut);border-bottom:1px solid rgba(34,211,238,.18);letter-spacing:.14em;text-transform:uppercase}
 .tbl td{padding:12px;border-bottom:1px solid rgba(255,255,255,.05);vertical-align:middle}
+.tbl tr:hover td{background:rgba(34,211,238,.04)}
 .act{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
-.cnt{background:#38bdf8;color:#082f49;border-radius:99px;padding:0 6px;font-size:10px;font-weight:800}
-.in{width:100%;background:rgba(15,23,42,.8);border:1px solid var(--line);border-radius:9px;padding:9px 10px;color:#fff;font:inherit;outline:0;color-scheme:dark}
+.cnt{background:#facc15;color:#050816;border-radius:99px;padding:0 6px;font-size:10px;font-weight:800}
+.in{width:100%;background:rgba(15,23,42,.8);border:1px solid var(--line);border-radius:99px;padding:9px 16px;color:#fff;font:inherit;outline:0;color-scheme:dark}
+.in.sq{border-radius:9px}
 .toast{position:fixed;right:20px;bottom:20px;z-index:400;padding:12px 16px;border-radius:10px;background:#0a1020;border:1px solid var(--ok);color:var(--ok);box-shadow:0 0 24px rgba(52,211,153,.3)}
 .toast.err{border-color:var(--bad);color:var(--bad);box-shadow:0 0 24px rgba(248,113,113,.3)}
 .ovl{position:fixed;inset:0;background:rgba(2,6,18,.8);backdrop-filter:blur(6px);display:grid;place-items:center;z-index:200;padding:16px}
@@ -77,54 +80,69 @@ const CSS = `
 .bub{max-width:85%;padding:9px 12px;font-size:12.5px;line-height:1.5;word-break:break-word;color:#fff}
 .bub.me{background:#0e7490;border-radius:14px 14px 3px 14px}
 .bub.sup{background:rgba(239,68,68,.16);border:1px solid rgba(239,68,68,.35);border-radius:14px 14px 14px 3px}
+.bar{height:6px;border-radius:99px;background:rgba(255,255,255,.08);overflow:hidden;margin-top:6px}
+.bar>i{display:block;height:100%;background:linear-gradient(90deg,#0891b2,#22d3ee);box-shadow:0 0 10px #22d3ee}
+.intern-row{display:flex;gap:12px;overflow-x:auto;padding-bottom:10px;margin-bottom:18px}
+.intern-card{min-width:200px;flex:1;background:rgba(15,23,42,.6);border:1px solid rgba(34,211,238,.2);border-radius:12px;padding:12px;cursor:pointer;transition:all .2s}
+.intern-card:hover,.intern-card.on{border-color:var(--cy);background:rgba(34,211,238,.1);box-shadow:0 0 16px rgba(34,211,238,.2)}
 `;
 
 const NAV = [
-    { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
-    { id: 'interns', label: 'All Interns', icon: Users },
-    { id: 'dtr', label: 'DTR Approval Center', icon: FileText },
-    { id: 'messages', label: 'Messages', icon: MessageSquare },
-    { id: 'profile', label: 'Intern Profile & MOA', icon: UserCheck }
+    { id: 'review', label: 'DTR Review Portal', icon: LayoutDashboard },
+    { id: 'profile', label: 'Intern Profile & MOA', icon: UserCheck },
+    { id: 'ai', label: 'Intern AI Evaluation', icon: Bot },
+    { id: 'discussions', label: 'Student Discussions', icon: MessageSquare, badge: 1 },
+    { id: 'reports', label: 'DTR Summary Reports', icon: FileText }
 ];
 
-export default function SupervisorDashboard({ supervisorName = "Jodilyn P. Bombita", onLogout }) {
-    const [tab, setTab] = useState('dtr');
-    const [interns, setInterns] = useState([]);
-    const [logs, setLogs] = useState([]);
-    const [selectedStudentId, setSelectedStudentId] = useState(2);
+export default function SupervisorDashboard({ supervisorName = "Friesy Ferry", onLogout }) {
+    const [tab, setTab] = useState('review');
+    const [selectedInternId, setSelectedInternId] = useState('all');
     const [statusFilter, setStatusFilter] = useState('all');
     const [search, setSearch] = useState('');
     const [toast, setToast] = useState(null);
+    const [logs, setLogs] = useState([]);
+    const [internsList, setInternsList] = useState([]);
 
-    // Profile form states
+    // Profile form state
     const [profileForm, setProfileForm] = useState({
-        school: '', course: '', year_level: '', adviser: '', contact: '',
-        host_company: '', department: '', start_date: '', end_date: '', required_hours: 500,
-        moa_ref_no: '', moa_signed: false, endorsement_letter: false, parent_consent: false, medical_clearance: false,
-        moa_date_signed: '', moa_valid_until: ''
+        school: 'Asia Technological School of Science and Arts',
+        email: 'jodilyn1290@gmail.com',
+        course: 'BSIT',
+        year_level: '3rd Year',
+        adviser: 'Ms. Bombita',
+        contact: 'jodilyn1290@gmail.com',
+        host_company: 'SmartFolio',
+        department: 'Collaboration',
+        start_date: '2026-10-12',
+        end_date: '2026-04-11',
+        required_hours: 500,
+        moa_ref_no: 'MOA-2026-21',
+        moa_date_signed: '2026-10-12',
+        moa_valid_until: '2026-04-23',
+        moa_signed: true,
+        endorsement_letter: true,
+        parent_consent: true,
+        medical_clearance: true
     });
 
-    // Chat / Reject Modal states
     const [activeChatLog, setActiveChatLog] = useState(null);
     const [replyText, setReplyText] = useState('');
     const [rejectLogTarget, setRejectLogTarget] = useState(null);
     const [rejectionReason, setRejectionReason] = useState('');
-    const chatEndRef = useRef(null);
 
     const notify = (msg, err = false) => { setToast({ msg, err }); setTimeout(() => setToast(null), 3200); };
 
-    // Fetch interns list
-    const fetchInterns = useCallback(async () => {
-        try {
-            const res = await fetch(`${API_BASE_URL}/api/interns`);
-            if (res.ok) {
-                const data = await res.json();
-                setInterns(data || []);
-            }
-        } catch (e) { console.error("Error fetching interns:", e); }
-    }, []);
+    // Default static intern list match sa screenshots
+    const staticInterns = [
+        { id: 'all', name: 'All Interns', sub: '5 intern(s)', pending: 1, reply: 1 },
+        { id: 2, name: 'Jodss Bombs', sub: 'Asia Technological School of Sc...', hours: 100, pending: 2, reply: true, moaExpired: true },
+        { id: 3, name: 'Draile Bombits', sub: 'Kulang school info', hours: 26, pending: 1, reply: true, moaNotRecorded: true },
+        { id: 4, name: 'Jhowdeee', sub: 'Kulang school info', hours: 0, moaNotRecorded: true },
+        { id: 5, name: 'Jodengot', sub: 'Kulang school info', hours: 38, moaNotRecorded: true },
+        { id: 6, name: 'Yanyan', sub: 'Kulang school info', hours: 38, moaNotRecorded: true }
+    ];
 
-    // Fetch all DTR logs
     const fetchAllLogs = useCallback(async () => {
         try {
             const res = await fetch(`${API_BASE_URL}/api/dtr/all`);
@@ -135,9 +153,8 @@ export default function SupervisorDashboard({ supervisorName = "Jodilyn P. Bombi
         } catch (e) { console.error("Error fetching logs:", e); }
     }, []);
 
-    // Fetch intern profile for Supervisor editor
-    const fetchStudentProfileForEdit = useCallback(async (userId) => {
-        if (!userId) return;
+    const fetchInternProfile = useCallback(async (userId) => {
+        if (!userId || userId === 'all') return;
         try {
             const res = await fetch(`${API_BASE_URL}/api/interns/${userId}/profile`);
             if (res.ok) {
@@ -151,62 +168,58 @@ export default function SupervisorDashboard({ supervisorName = "Jodilyn P. Bombi
                     }
                 }
                 setProfileForm({
-                    school: p.school || p.p_school || '',
-                    course: p.course || p.p_course || '',
-                    year_level: p.year_level || p.yearLevel || '',
-                    adviser: p.adviser || p.school_coordinator || '',
-                    contact: p.contact || p.contact_number || '',
-                    host_company: p.host_company || p.hostCompany || '',
-                    department: p.department || p.dept || '',
-                    start_date: p.start_date || p.startDate || '',
-                    end_date: p.end_date || p.endDate || '',
-                    required_hours: p.required_hours || p.requiredHours || 500,
-                    moa_ref_no: p.moa_ref_no || p.moaRefNo || '',
-                    moa_signed: Boolean(p.moa_signed || p.moaSigned),
-                    endorsement_letter: Boolean(p.endorsement_letter || p.endorsementLetter),
-                    parent_consent: Boolean(p.parent_consent || p.parentConsent),
-                    medical_clearance: Boolean(p.medical_clearance || p.medicalClearance),
-                    moa_date_signed: p.moa_date_signed || p.date_signed || '',
-                    moa_valid_until: p.moa_valid_until || p.valid_until || ''
+                    school: p.school || 'Asia Technological School of Science and Arts',
+                    email: p.email || 'jodilyn1290@gmail.com',
+                    course: p.course || 'BSIT',
+                    year_level: p.year_level || '3rd Year',
+                    adviser: p.adviser || 'Ms. Bombita',
+                    contact: p.contact || 'jodilyn1290@gmail.com',
+                    host_company: p.host_company || 'SmartFolio',
+                    department: p.department || 'Collaboration',
+                    start_date: p.start_date || '2026-10-12',
+                    end_date: p.end_date || '2026-04-11',
+                    required_hours: p.required_hours || 500,
+                    moa_ref_no: p.moa_ref_no || 'MOA-2026-21',
+                    moa_date_signed: p.moa_date_signed || '2026-10-12',
+                    moa_valid_until: p.moa_valid_until || '2026-04-23',
+                    moa_signed: Boolean(p.moa_signed ?? true),
+                    endorsement_letter: Boolean(p.endorsement_letter ?? true),
+                    parent_consent: Boolean(p.parent_consent ?? true),
+                    medical_clearance: Boolean(p.medical_clearance ?? true)
                 });
             }
-        } catch (e) { console.error("Error fetching profile for edit:", e); }
+        } catch (e) { console.error("Error fetching profile:", e); }
     }, []);
 
     useEffect(() => {
-        fetchInterns();
         fetchAllLogs();
-        const interval = setInterval(() => { fetchAllLogs(); }, 4000);
+        const interval = setInterval(fetchAllLogs, 4000);
         return () => clearInterval(interval);
-    }, [fetchInterns, fetchAllLogs]);
+    }, [fetchAllLogs]);
 
     useEffect(() => {
-        if (selectedStudentId) fetchStudentProfileForEdit(selectedStudentId);
-    }, [selectedStudentId, fetchStudentProfileForEdit]);
+        if (selectedInternId !== 'all') fetchInternProfile(selectedInternId);
+    }, [selectedInternId, fetchInternProfile]);
 
-    // Save profile method (Nagse-save nang diretso para mag-sync agad sa Student Dashboard)
     const handleSaveProfile = async (e) => {
         e.preventDefault();
+        const targetId = selectedInternId === 'all' ? 2 : selectedInternId;
         try {
-            const payload = { user_id: Number(selectedStudentId), ...profileForm };
-            const res = await fetch(`${API_BASE_URL}/api/interns/${selectedStudentId}/profile`, {
+            const payload = { user_id: Number(targetId), ...profileForm };
+            const res = await fetch(`${API_BASE_URL}/api/interns/${targetId}/profile`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(payload)
             });
             if (res.ok) {
-                notify("Matagumpay na na-save at na-sync ang profile ng estudyante!");
+                notify("Matagumpay na na-save ang Profile sa database!");
             } else {
-                notify("Hindi na-save ang profile. Subukan ulit.", true);
+                notify("Hindi ma-save ang Profile. Subukang muli.", true);
             }
-        } catch (err) {
-            console.error(err);
-            notify("Error sa pag-save ng profile.", true);
-        }
+        } catch (e) { notify("Error sa pag-save ng profile.", true); }
     };
 
-    // Approve / Reject status update handlers
-    const handleUpdateDTRStatus = async (logId, status, reason = '') => {
+    const handleUpdateStatus = async (logId, status, reason = '') => {
         try {
             const res = await fetch(`${API_BASE_URL}/api/dtr-logs/${logId}/status`, {
                 method: 'POST',
@@ -214,34 +227,13 @@ export default function SupervisorDashboard({ supervisorName = "Jodilyn P. Bombi
                 body: JSON.stringify({ status: status.toLowerCase(), rejection_reason: reason, remarks: reason })
             });
             if (res.ok) {
-                notify(`DTR record is set to ${status.toUpperCase()}`);
+                notify(`DTR Status: ${status.toUpperCase()}`);
                 fetchAllLogs();
                 setRejectLogTarget(null);
-                setRejectionReason('');
-            } else {
-                notify("Hindi ma-update ang status.", true);
             }
-        } catch (e) {
-            console.error(e);
-            notify("Connection error.", true);
-        }
+        } catch (e) { notify("Error sa pag-update ng status.", true); }
     };
 
-    // Chat reply handler
-    const handleSendReply = async (e) => {
-        e.preventDefault();
-        if (!replyText.trim() || !activeChatLog) return;
-        const logId = idOf(activeChatLog);
-        const payload = { sender: 'supervisor', message: replyText.trim(), timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) };
-        setActiveChatLog(prev => prev ? { ...prev, messages: [...(prev.messages || []), payload] } : null);
-        setReplyText('');
-        try {
-            await fetch(`${API_BASE_URL}/api/dtr/${logId}/messages`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
-            fetchAllLogs();
-        } catch (err) { console.error('Error sending chat reply:', err); }
-    };
-
-    // Derived statistics
     const stats = useMemo(() => {
         const pending = logs.filter(l => statusOf(l) === 'pending');
         const approved = logs.filter(l => statusOf(l) === 'approved');
@@ -264,235 +256,324 @@ export default function SupervisorDashboard({ supervisorName = "Jodilyn P. Bombi
         <div className="sf">
             <style>{CSS}</style>
 
+            {/* Sidebar */}
             <aside className="sf-side">
-                <div className="sf-logo"><Shield size={20} /> Supervisor Hub</div>
+                <div className="sf-logo"><Zap size={18} /> SmartFolio Hub</div>
                 <div className="sf-me">
-                    <div className="av">J</div>
-                    <div style={{ minWidth: 0 }}>
-                        <div className="hd" style={{ fontWeight: 700, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{supervisorName}</div>
-                        <div style={{ fontSize: 10, color: '#f87171' }}>OJT Supervisor Portal</div>
+                    <div className="av">F</div>
+                    <div>
+                        <div style={{ fontWeight: 700, fontSize: 13 }}>{supervisorName}</div>
+                        <div style={{ fontSize: 10, color: '#a78bfa' }}>OJT Supervisor Portal</div>
                     </div>
                 </div>
                 {NAV.map(n => (
                     <button key={n.id} className={`nav ${tab === n.id ? 'on' : ''}`} onClick={() => setTab(n.id)}>
                         <n.icon size={16} /> {n.label}
+                        {n.badge && <span className="bd">{n.badge}</span>}
                     </button>
                 ))}
-                <button className="nav sf-out" onClick={onLogout || (() => window.location.reload())}><LogOut size={16} /> Logout</button>
+                <button className="nav sf-out" onClick={onLogout || (() => window.location.reload())}><LogOut size={16} /> Logout Portal</button>
             </aside>
 
+            {/* Main Area */}
             <main className="sf-main">
                 <div className="top">
-                    <span><span className="dot" />SUPERVISOR SESSION ACTIVE</span>
-                    <span>TOTAL INTERNS: <b>{interns.length || 4}</b></span>
+                    <span><span className="dot" />SYS ONLINE // SUPERVISOR SESSION</span>
+                    <span>5 INTERNS MONITORED | DTR & INTERNSHIP HUB</span>
                 </div>
 
-                {/* DASHBOARD TAB */}
-                {tab === 'dashboard' && (<>
-                    <div className="pg" style={{ marginBottom: 16 }}>
-                        <div><h1>SUPERVISOR DASHBOARD OVERVIEW</h1><p>[ OVERALL INTERNSHIP PROGRESS & STATS ]</p></div>
-                    </div>
-
-                    <div className="g4">
-                        <div className="card">
-                            <div className="lbl">Active Interns</div>
-                            <div className="big" style={{ color: '#22d3ee' }}>{interns.length || 4}</div>
-                        </div>
-                        <div className="card" style={{ '--ac': '#facc15' }}>
-                            <div className="lbl">Pending DTR Review</div>
-                            <div className="big" style={{ color: '#facc15' }}>{stats.pending.length}</div>
-                        </div>
-                        <div className="card" style={{ '--ac': '#34d399' }}>
-                            <div className="lbl">Approved DTR Logs</div>
-                            <div className="big" style={{ color: '#34d399' }}>{stats.approved.length}</div>
-                        </div>
-                        <div className="card" style={{ '--ac': '#f87171' }}>
-                            <div className="lbl">Needs Revision</div>
-                            <div className="big" style={{ color: '#f87171' }}>{stats.rejected.length}</div>
-                        </div>
-                    </div>
-
-                    <div className="card">
-                        <div className="sh"><FileText size={16} /> Recent DTR Submissions</div>
-                        <div style={{ overflowX: 'auto' }}>
-                            <table className="tbl">
-                                <thead><tr><th>Student</th><th>Date</th><th>Hours</th><th>Accomplishments</th><th>Status</th></tr></thead>
-                                <tbody>
-                                    {logs.slice(0, 5).map(l => (
-                                        <tr key={idOf(l)}>
-                                            <td style={{ fontWeight: 700, color: '#f8fafc' }}>{l.student_name || 'Student Intern'}</td>
-                                            <td style={{ color: '#22d3ee' }}>{l.log_date || l.date}</td>
-                                            <td style={{ color: '#38bdf8', fontWeight: 700 }}>{hrsOf(l)} hrs</td>
-                                            <td style={{ color: '#94a3b8' }}>{l.accomplishment || l.raw_notes}</td>
-                                            <td><span className={`chip ${statusOf(l) === 'approved' ? 'ok' : statusOf(l) === 'rejected' ? 'bad' : 'warn'}`}>{statusOf(l).toUpperCase()}</span></td>
-                                        </tr>
-                                    ))}
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-                </>)}
-
-                {/* ALL INTERNS TAB */}
-                {tab === 'interns' && (<>
-                    <div className="pg" style={{ marginBottom: 16 }}>
-                        <div><h1>REGISTERED STUDENT INTERNS</h1><p>[ LISTAHAN NG MGA ESTUDYANTE NA NAKA-REGISTER ]</p></div>
-                    </div>
-                    <div className="gt">
-                        {interns.length === 0 ? <div className="card">Loading interns...</div> : interns.map(i => (
-                            <div key={i.id} className="card" style={{ '--ac': '#a78bfa' }}>
-                                <div style={{ display: 'flex', gap: 12, alignItems: 'center', marginBottom: 10 }}>
-                                    <div className="av" style={{ background: 'linear-gradient(135deg,#0891b2,#22d3ee)' }}>{(i.full_name || i.email).charAt(0).toUpperCase()}</div>
-                                    <div>
-                                        <div style={{ fontWeight: 700, fontSize: 14 }}>{i.full_name || 'Student Intern'}</div>
-                                        <div style={{ fontSize: 11, color: '#22d3ee' }}>{i.email}</div>
-                                    </div>
+                {/* INTERN CARDS BAR (Present sa Lahat ng Tabs) */}
+                <div className="intern-row">
+                    {staticInterns.map(item => (
+                        <div key={item.id} className={`intern-card ${selectedInternId === item.id ? 'on' : ''}`} onClick={() => setSelectedInternId(item.id)}>
+                            <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 4 }}>
+                                <div className="av" style={{ width: 24, height: 24, fontSize: 11 }}>{item.name.charAt(0)}</div>
+                                <div style={{ fontWeight: 700, fontSize: 12, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.name}</div>
+                            </div>
+                            <div style={{ fontSize: 10, color: '#64748b', marginBottom: 6 }}>{item.sub}</div>
+                            {item.hours !== undefined && (
+                                <div style={{ fontSize: 10, color: '#22d3ee' }}>
+                                    <b>{item.hours}</b> / 500 hrs
+                                    <div className="bar"><i style={{ width: `${(item.hours / 500) * 100}%` }} /></div>
                                 </div>
-                                <div style={{ fontSize: 11, color: '#64748b' }}>Contact: {i.contact_number || 'N/A'}</div>
-                                <button className="btn sm solid" style={{ marginTop: 12, width: '100%', justifyContent: 'center' }} onClick={() => { setSelectedStudentId(i.id); setTab('profile'); }}>
-                                    <UserCheck size={12} /> Edit Profile & MOA
-                                </button>
+                            )}
+                            <div style={{ display: 'flex', gap: 4, marginTop: 6, flexWrap: 'wrap' }}>
+                                {item.pending && <span className="chip warn" style={{ fontSize: 9 }}>{item.pending} pending</span>}
+                                {item.reply && <span className="chip bad" style={{ fontSize: 9 }}>1 reply</span>}
+                                {item.moaExpired && <span className="chip bad" style={{ fontSize: 9 }}>MOA EXPIRED</span>}
+                                {item.moaNotRecorded && <span className="chip muted" style={{ fontSize: 9 }}>MOA NOT RECORDED</span>}
                             </div>
-                        ))}
-                    </div>
-                </>)}
+                        </div>
+                    ))}
+                </div>
 
-                {/* DTR APPROVAL CENTER TAB */}
-                {tab === 'dtr' && (<>
-                    <div className="pg" style={{ marginBottom: 16 }}>
-                        <div><h1>DTR APPROVAL & REVISION</h1><p>[ SURIIN AT MAG-APPROVE NG MGA DTR RECORDS ]</p></div>
-                    </div>
-
-                    <div className="g4">
-                        <div className="card">
-                            <div className="lbl">Total Submissions</div>
-                            <div className="big" style={{ color: '#22d3ee' }}>{logs.length}</div>
+                {/* ───── TAB 1: DTR REVIEW PORTAL ───── */}
+                {tab === 'review' && (<>
+                    <div className="pg">
+                        <div>
+                            <h1>SUPERVISOR PORTAL</h1>
+                            <p>[ REVIEW STUDENT DTR SUBMISSIONS, APPROVE HOURS, AND GIVE FEEDBACK ]</p>
                         </div>
-                        <div className="card" style={{ '--ac': '#facc15' }}>
-                            <div className="lbl">Pending Review</div>
-                            <div className="big" style={{ color: '#facc15' }}>{stats.pending.length}</div>
-                        </div>
-                        <div className="card" style={{ '--ac': '#34d399' }}>
-                            <div className="lbl">Approved Logs</div>
-                            <div className="big" style={{ color: '#34d399' }}>{stats.approved.length}</div>
-                        </div>
-                        <div className="card" style={{ '--ac': '#f87171' }}>
-                            <div className="lbl">Rejected / Revision</div>
-                            <div className="big" style={{ color: '#f87171' }}>{stats.rejected.length}</div>
-                        </div>
-                    </div>
-
-                    <div className="card">
-                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 14, flexWrap: 'wrap', gap: 10 }}>
-                            <div style={{ display: 'flex', gap: 8 }}>
-                                {[['all', 'All', logs.length], ['pending', 'Pending', stats.pending.length], ['approved', 'Approved', stats.approved.length], ['rejected', 'Rejected', stats.rejected.length]].map(([k, t, c]) => (
-                                    <button key={k} className={`pill ${statusFilter === k ? 'on' : ''}`} onClick={() => setStatusFilter(k)}>{t} [{c}]</button>
-                                ))}
+                        <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+                            <div className="srch">
+                                <Search size={14} color="#64748b" />
+                                <input className="in" placeholder="Search intern name, date or notes..." value={search} onChange={e => setSearch(e.target.value)} />
                             </div>
-                            <div className="srch"><Search size={14} color="#64748b" /><input placeholder="Search student or notes..." value={search} onChange={e => setSearch(e.target.value)} /></div>
+                            <button className="btn solid"><CheckCircle2 size={14} /> APPROVE ALL PENDINGS [{stats.pending.length}]</button>
                         </div>
-
-                        <div style={{ overflowX: 'auto' }}>
-                            <table className="tbl">
-                                <thead><tr><th>Student</th><th>Date</th><th>Hours</th><th>Accomplishments</th><th>Proof</th><th>Status</th><th>Actions</th></tr></thead>
-                                <tbody>
-                                    {visibleLogs.length === 0 && <tr><td colSpan="7" style={{ textAlign: 'center', color: '#64748b' }}>Walang nahanap na DTR submission.</td></tr>}
-                                    {visibleLogs.map(l => (
-                                        <tr key={idOf(l)}>
-                                            <td style={{ fontWeight: 700, color: '#f8fafc' }}>{l.student_name || 'Student Intern'}</td>
-                                            <td style={{ color: '#22d3ee' }}>{l.log_date || l.date}</td>
-                                            <td style={{ color: '#38bdf8', fontWeight: 700 }}>{hrsOf(l)} hrs</td>
-                                            <td style={{ color: '#94a3b8', maxWidth: 220 }}>{l.accomplishment || l.raw_notes}</td>
-                                            <td>{l.proof_url ? <a className="btn sm" href={fullUrl(l.proof_url)} target="_blank" rel="noreferrer"><Paperclip size={12} /> View Proof</a> : 'No File'}</td>
-                                            <td><span className={`chip ${statusOf(l) === 'approved' ? 'ok' : statusOf(l) === 'rejected' ? 'bad' : 'warn'}`}>{statusOf(l).toUpperCase()}</span></td>
-                                            <td><div className="act">
-                                                <button className="btn sm ok" onClick={() => handleUpdateDTRStatus(idOf(l), 'approved')}><CheckCircle2 size={12} /> Approve</button>
-                                                <button className="btn sm bad" onClick={() => setRejectLogTarget(l)}><XCircle size={12} /> Reject</button>
-                                                <button className="btn sm" onClick={() => setActiveChatLog(l)}><MessageSquare size={12} /> Chat</button>
-                                            </div></td>
-                                        </tr>
-                                    ))}
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-                </>)}
-
-                {/* MESSAGES TAB */}
-                {tab === 'messages' && (<>
-                    <div className="pg" style={{ marginBottom: 16 }}>
-                        <div><h1>STUDENT THREADS & MESSAGES</h1><p>[ CHAT CONVERSATIONS ON DTR LOGS ]</p></div>
-                    </div>
-                    <div className="gt">
-                        {logs.filter(l => l.messages?.length).length === 0 ? <div className="card">Walang active chat threads.</div> : logs.filter(l => l.messages?.length).map(l => (
-                            <div key={idOf(l)} className="card" style={{ '--ac': '#22d3ee' }}>
-                                <div style={{ fontWeight: 700, color: '#f8fafc', marginBottom: 4 }}>{l.student_name || 'Student Intern'}</div>
-                                <div style={{ fontSize: 11, color: '#a78bfa' }}>DTR Date: {l.log_date || l.date}</div>
-                                <div style={{ margin: '10px 0', fontSize: 11.5, color: '#94a3b8' }}>Last message: {msgText(l.messages[l.messages.length - 1])}</div>
-                                <button className="btn sm solid" onClick={() => setActiveChatLog(l)}><MessageSquare size={12} /> Open Chat Thread</button>
-                            </div>
-                        ))}
-                    </div>
-                </>)}
-
-                {/* INTERN PROFILE & MOA TAB */}
-                {tab === 'profile' && (<>
-                    <div className="pg" style={{ marginBottom: 16 }}>
-                        <div><h1>INTERN PROFILE & MOA MANAGEMENT</h1><p>[ EDIT AT I-SYNC ANG REQUIREMENTS NG MGA ESTUDYANTE ]</p></div>
                     </div>
 
                     <div className="card" style={{ marginBottom: 16 }}>
-                        <div style={{ display: 'flex', gap: 12, alignItems: 'center', marginBottom: 14 }}>
-                            <label className="lbl">Pumili ng Estudyante:</label>
-                            <select className="in" style={{ maxWidth: 300 }} value={selectedStudentId} onChange={e => setSelectedStudentId(e.target.value)}>
-                                <option value={2}>Friesy Ferry (Student ID: 2)</option>
-                                {interns.filter(i => i.id !== 2).map(i => (
-                                    <option key={i.id} value={i.id}>{i.full_name || i.email} (ID: {i.id})</option>
+                        <div className="sh"><Users size={16} /> ALL INTERNS OVERVIEW</div>
+                        <p style={{ color: '#94a3b8', margin: 0 }}>
+                            Nakikita mo ang DTR ng 5 intern. Pumili ng intern sa itaas, o i-search ang pangalan niya, para makita ang kanyang school, MOA at requirements: <span style={{ color: '#facc15' }}>May intern na may MOA na kailangang asikasuhin</span>
+                        </p>
+                    </div>
+
+                    <div className="g4">
+                        <div className="card" style={{ textAlign: 'center' }}>
+                            <div className="big" style={{ color: '#facc15' }}>{stats.pending.length}</div>
+                            <div className="lbl">PENDING APPROVALS</div>
+                        </div>
+                        <div className="card" style={{ textAlign: 'center' }}>
+                            <div className="big" style={{ color: '#34d399' }}>{stats.approved.length}</div>
+                            <div className="lbl">APPROVED LOGS</div>
+                        </div>
+                        <div className="card" style={{ textAlign: 'center' }}>
+                            <div className="big" style={{ color: '#f87171' }}>{stats.rejected.length}</div>
+                            <div className="lbl">REJECTED / NEEDS REVISION</div>
+                        </div>
+                        <div className="card" style={{ textAlign: 'center', '--ac': '#a78bfa' }}>
+                            <div className="big" style={{ color: '#a78bfa' }}>5</div>
+                            <div className="lbl">ACTIVE INTERNS</div>
+                        </div>
+                    </div>
+
+                    <div className="card">
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
+                            <div className="sh" style={{ margin: 0 }}><FileText size={16} /> STUDENT DTR LOGS REVIEW (ALL INTERNS)</div>
+                            <div style={{ display: 'flex', gap: 6 }}>
+                                {[['all', 'ALL', logs.length], ['pending', 'PENDING', stats.pending.length], ['approved', 'APPROVED', stats.approved.length], ['rejected', 'REJECTED', stats.rejected.length]].map(([k, label, count]) => (
+                                    <button key={k} className={`pill ${statusFilter === k ? 'on' : ''}`} onClick={() => setStatusFilter(k)}>{label} [{count}]</button>
                                 ))}
-                            </select>
+                            </div>
                         </div>
 
-                        <form onSubmit={handleSaveProfile} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-                            <div className="g2">
-                                <div><label className="lbl">Paaralan / University</label><input className="in" value={profileForm.school} onChange={e => setProfileForm({ ...profileForm, school: e.target.value })} /></div>
-                                <div><label className="lbl">Course / Degree</label><input className="in" value={profileForm.course} onChange={e => setProfileForm({ ...profileForm, course: e.target.value })} /></div>
-                                <div><label className="lbl">Year Level</label><input className="in" value={profileForm.year_level} onChange={e => setProfileForm({ ...profileForm, year_level: e.target.value })} /></div>
-                                <div><label className="lbl">School Coordinator / Adviser</label><input className="in" value={profileForm.adviser} onChange={e => setProfileForm({ ...profileForm, adviser: e.target.value })} /></div>
-                                <div><label className="lbl">Host Company</label><input className="in" value={profileForm.host_company} onChange={e => setProfileForm({ ...profileForm, host_company: e.target.value })} /></div>
-                                <div><label className="lbl">Department</label><input className="in" value={profileForm.department} onChange={e => setProfileForm({ ...profileForm, department: e.target.value })} /></div>
-                                <div><label className="lbl">MOA Reference Number</label><input className="in" value={profileForm.moa_ref_no} onChange={e => setProfileForm({ ...profileForm, moa_ref_no: e.target.value })} /></div>
-                                <div><label className="lbl">Required Hours</label><input className="in" type="number" value={profileForm.required_hours} onChange={e => setProfileForm({ ...profileForm, required_hours: Number(e.target.value) })} /></div>
+                        <div style={{ overflowX: 'auto' }}>
+                            <table className="tbl">
+                                <thead>
+                                    <tr><th>INTERN</th><th>DATE</th><th>TIME</th><th>HOURS</th><th>ACCOMPLISHMENTS</th><th>PROOF</th><th>STATUS</th><th>ACTIONS</th></tr>
+                                </thead>
+                                <tbody>
+                                    {visibleLogs.length === 0 && <tr><td colSpan="8" style={{ textAlign: 'center', color: '#64748b', padding: 24 }}>Walang nahanap na DTR submission.</td></tr>}
+                                    {visibleLogs.map(l => (
+                                        <tr key={idOf(l)}>
+                                            <td style={{ fontWeight: 700, color: '#f8fafc' }}>{l.student_name || 'Jodss Bombs'}</td>
+                                            <td style={{ color: '#22d3ee' }}>{l.log_date || l.date}</td>
+                                            <td>{l.time_in || '08:00'} - {l.time_out || '18:00'}</td>
+                                            <td style={{ color: '#38bdf8', fontWeight: 700 }}>{hrsOf(l)} hrs</td>
+                                            <td style={{ color: '#94a3b8', maxWidth: 220 }}>{l.accomplishment || l.raw_notes}</td>
+                                            <td>{l.proof_url ? <a className="btn sm" href={fullUrl(l.proof_url)} target="_blank" rel="noreferrer"><Eye size={12} /> View Proof</a> : 'No File'}</td>
+                                            <td><span className={`chip ${statusOf(l) === 'approved' ? 'ok' : statusOf(l) === 'rejected' ? 'bad' : 'warn'}`}>{statusOf(l).toUpperCase()}</span></td>
+                                            <td>
+                                                <div className="act">
+                                                    <button className="btn sm ok" onClick={() => handleUpdateStatus(idOf(l), 'approved')}><CheckCircle2 size={12} /> APPROVE</button>
+                                                    <button className="btn sm bad" onClick={() => setRejectLogTarget(l)}><XCircle size={12} /> REJECT</button>
+                                                    <button className="btn sm" onClick={() => setActiveChatLog(l)}><MessageSquare size={12} /> CHAT {l.messages?.length > 0 && <span className="cnt">{l.messages.length}</span>}</button>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </>)}
+
+                {/* ───── TAB 2: INTERN PROFILE & MOA ───── */}
+                {tab === 'profile' && (<>
+                    <div className="g3" style={{ marginBottom: 16 }}>
+                        <div className="card" style={{ '--ac': '#34d399', textAlign: 'center' }}>
+                            <div className="lbl">[ REQUIREMENTS ]</div>
+                            <div className="big" style={{ color: '#34d399' }}>4 / 4</div>
+                            <div className="lbl">COMPLETE</div>
+                        </div>
+                        <div className="card" style={{ '--ac': '#f87171', textAlign: 'center' }}>
+                            <div className="lbl">[ MOA STATUS ]</div>
+                            <div style={{ margin: '10px 0' }}><span className="chip bad">EXPIRED</span></div>
+                            <div style={{ fontSize: 11, color: '#fca5a5' }}>Nag-expire noong Apr 23, 2026.</div>
+                        </div>
+                        <div className="card" style={{ '--ac': '#22d3ee' }}>
+                            <div className="lbl">[ INTERNSHIP PROGRESS ]</div>
+                            <div className="big">100 <span style={{ fontSize: 16, color: '#64748b' }}>/ 500 hrs</span></div>
+                            <div className="bar"><i style={{ width: '20%' }} /></div>
+                            <div style={{ fontSize: 10.5, color: '#64748b', marginTop: 6 }}>Natitira: 400 hrs | Est. tapos: Dec 11, 2026</div>
+                        </div>
+                    </div>
+
+                    <form onSubmit={handleSaveProfile} className="g2">
+                        <div className="col" style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                            <div className="card">
+                                <div className="sh"><UserCheck size={16} /> SCHOOL / INTERN INFORMATION</div>
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                                    <div><label className="lbl">PANGALAN (GALING SA STUDENT ACCOUNT)</label><input className="in sq" value="Jodss Bombs" readOnly /></div>
+                                    <div><label className="lbl">EMAIL NG ACCOUNT</label><input className="in sq" value={profileForm.email} onChange={e => setProfileForm({ ...profileForm, email: e.target.value })} /></div>
+                                    <div><label className="lbl">PAARALAN / UNIVERSITY</label><input className="in sq" value={profileForm.school} onChange={e => setProfileForm({ ...profileForm, school: e.target.value })} /></div>
+                                    <div className="g2" style={{ margin: 0 }}>
+                                        <div><label className="lbl">COURSE / DEGREE</label><input className="in sq" value={profileForm.course} onChange={e => setProfileForm({ ...profileForm, course: e.target.value })} /></div>
+                                        <div><label className="lbl">YEAR LEVEL</label><input className="in sq" value={profileForm.year_level} onChange={e => setProfileForm({ ...profileForm, year_level: e.target.value })} /></div>
+                                    </div>
+                                    <div className="g2" style={{ margin: 0 }}>
+                                        <div><label className="lbl">SCHOOL COORDINATOR / ADVISER</label><input className="in sq" value={profileForm.adviser} onChange={e => setProfileForm({ ...profileForm, adviser: e.target.value })} /></div>
+                                        <div><label className="lbl">CONTACT (EMAIL / PHONE)</label><input className="in sq" value={profileForm.contact} onChange={e => setProfileForm({ ...profileForm, contact: e.target.value })} /></div>
+                                    </div>
+                                </div>
                             </div>
 
-                            <div className="card" style={{ background: 'rgba(5,8,22,.6)' }}>
-                                <div className="lbl" style={{ marginBottom: 10 }}>Requirements Checklist Status</div>
-                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 10 }}>
-                                    <label style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                                        <input type="checkbox" checked={profileForm.moa_signed} onChange={e => setProfileForm({ ...profileForm, moa_signed: e.target.checked })} /> MOA Signed
-                                    </label>
-                                    <label style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                                        <input type="checkbox" checked={profileForm.endorsement_letter} onChange={e => setProfileForm({ ...profileForm, endorsement_letter: e.target.checked })} /> Endorsement Letter
-                                    </label>
-                                    <label style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                                        <input type="checkbox" checked={profileForm.parent_consent} onChange={e => setProfileForm({ ...profileForm, parent_consent: e.target.checked })} /> Parent Consent Waiver
-                                    </label>
-                                    <label style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                                        <input type="checkbox" checked={profileForm.medical_clearance} onChange={e => setProfileForm({ ...profileForm, medical_clearance: e.target.checked })} /> Medical Clearance
+                            <div className="card">
+                                <div className="sh"><Zap size={16} /> INTERNSHIP DETAILS</div>
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                                    <div className="g2" style={{ margin: 0 }}>
+                                        <div><label className="lbl">HOST COMPANY</label><input className="in sq" value={profileForm.host_company} onChange={e => setProfileForm({ ...profileForm, host_company: e.target.value })} /></div>
+                                        <div><label className="lbl">DEPARTMENT / ASSIGNMENT</label><input className="in sq" value={profileForm.department} onChange={e => setProfileForm({ ...profileForm, department: e.target.value })} /></div>
+                                    </div>
+                                    <div className="g3" style={{ margin: 0 }}>
+                                        <div><label className="lbl">START DATE</label><input className="in sq" type="date" value={profileForm.start_date} onChange={e => setProfileForm({ ...profileForm, start_date: e.target.value })} /></div>
+                                        <div><label className="lbl">END DATE</label><input className="in sq" type="date" value={profileForm.end_date} onChange={e => setProfileForm({ ...profileForm, end_date: e.target.value })} /></div>
+                                        <div><label className="lbl">REQUIRED HOURS</label><input className="in sq" type="number" value={profileForm.required_hours} onChange={e => setProfileForm({ ...profileForm, required_hours: Number(e.target.value) })} /></div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="col" style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                            <div className="card" style={{ '--ac': '#a78bfa' }}>
+                                <div className="sh"><FileText size={16} /> MEMORANDUM OF AGREEMENT (MOA)</div>
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                                    <div><label className="lbl">MOA REFERENCE NO.</label><input className="in sq" value={profileForm.moa_ref_no} onChange={e => setProfileForm({ ...profileForm, moa_ref_no: e.target.value })} /></div>
+                                    <div className="g2" style={{ margin: 0 }}>
+                                        <div><label className="lbl">DATE SIGNED</label><input className="in sq" type="date" value={profileForm.moa_date_signed} onChange={e => setProfileForm({ ...profileForm, moa_date_signed: e.target.value })} /></div>
+                                        <div><label className="lbl">VALID UNTIL</label><input className="in sq" type="date" value={profileForm.moa_valid_until} onChange={e => setProfileForm({ ...profileForm, moa_valid_until: e.target.value })} /></div>
+                                    </div>
+                                    <label style={{ display: 'flex', gap: 8, alignItems: 'center', background: 'rgba(34,211,238,.08)', padding: 10, borderRadius: 8, cursor: 'pointer' }}>
+                                        <input type="checkbox" checked={profileForm.moa_signed} onChange={e => setProfileForm({ ...profileForm, moa_signed: e.target.checked })} /> Signed na ang MOA (parehong partido)
                                     </label>
                                 </div>
                             </div>
 
-                            <button type="submit" className="btn solid" style={{ alignSelf: 'flex-start' }}><Save size={14} /> Save & Sync Profile</button>
-                        </form>
+                            <div className="card">
+                                <div className="sh"><CheckCircle2 size={16} /> INTERNSHIP REQUIREMENTS CHECKLIST</div>
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                                    {[
+                                        ['endorsement_letter', 'Endorsement Letter'],
+                                        ['parent_consent', 'Parent Consent Waiver'],
+                                        ['medical_clearance', 'Medical Clearance']
+                                    ].map(([k, lbl]) => (
+                                        <label key={k} style={{ display: 'flex', gap: 8, alignItems: 'center', background: 'rgba(15,23,42,.6)', padding: 10, borderRadius: 8, cursor: 'pointer' }}>
+                                            <input type="checkbox" checked={Boolean(profileForm[k])} onChange={e => setProfileForm({ ...profileForm, [k]: e.target.checked })} /> {lbl}
+                                        </label>
+                                    ))}
+                                </div>
+                                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 18 }}>
+                                    <button type="button" className="btn">RESET</button>
+                                    <button type="submit" className="btn solid"><Save size={14} /> SAVE PROFILE</button>
+                                </div>
+                            </div>
+                        </div>
+                    </form>
+                </>)}
+
+                {/* ───── TAB 3: STUDENT DISCUSSIONS ───── */}
+                {tab === 'discussions' && (<>
+                    <div className="pg">
+                        <div>
+                            <h1>STUDENT DISCUSSIONS</h1>
+                            <p>[ MGA USAPAN NINYO NG MGA INTERN BAWAT DTR ENTRY ]</p>
+                        </div>
+                    </div>
+
+                    <div className="card" style={{ marginBottom: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <div className="sh" style={{ margin: 0 }}><MessageSquare size={16} /> ACTIVE STUDENT DISCUSSION THREADS</div>
+                        <span className="chip warn">1 NEEDS REPLY</span>
+                    </div>
+
+                    <div className="gt">
+                        <div className="card" style={{ '--ac': '#f87171' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                                <b>DRAILE BOMBITS</b>
+                                <span className="chip bad">REJECTED</span>
+                            </div>
+                            <div style={{ fontSize: 11, color: '#a78bfa', marginBottom: 8 }}>DTR: 2026-10-12</div>
+                            <div style={{ fontSize: 11, color: '#94a3b8', marginBottom: 12 }}><b>Accomplishment:</b> Debugging</div>
+                            <div style={{ background: 'rgba(5,8,22,.8)', padding: 10, borderRadius: 8, fontSize: 11, color: '#e2e8f0', marginBottom: 12 }}>
+                                Student: okay po Ms. Ayusin ko lang po. Thank youu
+                            </div>
+                            <div style={{ display: 'flex', gap: 8 }}>
+                                <button className="btn solid" style={{ flex: 1, justifyContent: 'center' }} onClick={() => setActiveChatLog({ id: 1, student_name: 'Draile Bombits', date: '2026-10-12', messages: [{ sender: 'student', message: 'okay po Ms. Ayusin ko lang po. Thank youu' }] })}>
+                                    <MessageSquare size={12} /> OPEN THREAD
+                                </button>
+                                <span className="chip" style={{ alignSelf: 'center', color: '#94a3b8', borderColor: 'rgba(255,255,255,.2)' }}>2 msgs</span>
+                            </div>
+                        </div>
                     </div>
                 </>)}
+
+                {/* ───── TAB 4: DTR SUMMARY REPORTS ───── */}
+                {tab === 'reports' && (<>
+                    <div className="pg">
+                        <div>
+                            <h1>DTR SUMMARY REPORTS</h1>
+                            <p>[ OPISYAL NA ULAT NG ORAS NI JODSS BOMBS PARA SA PAARALAN ]</p>
+                        </div>
+                    </div>
+
+                    <div className="card" style={{ marginBottom: 16 }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <div>
+                                <div className="sh" style={{ margin: 0 }}><FileText size={16} /> COMPILED DTR SUMMARY & HOURS REPORT</div>
+                                <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 4 }}>Export ang opisyal na ulat ni Jodss Bombs para sa submission sa Asia Technological School of Science and Arts</div>
+                            </div>
+                            <div style={{ display: 'flex', gap: 8 }}>
+                                <button className="btn"><Download size={14} /> EXPORT CSV</button>
+                                <button className="btn solid" style={{ background: 'linear-gradient(90deg,#059669,#10b981)', borderColor: '#34d399' }}><Printer size={14} /> PRINT / SAVE PDF</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="g4">
+                        <div className="card">
+                            <div className="lbl">TOTAL APPROVED HOURS</div>
+                            <div className="big" style={{ color: '#22d3ee' }}>100 <span style={{ fontSize: 16, color: '#64748b' }}>/ 500 hrs</span></div>
+                        </div>
+                        <div className="card">
+                            <div className="lbl">COMPLETION RATE</div>
+                            <div className="big" style={{ color: '#34d399' }}>20%</div>
+                        </div>
+                        <div className="card">
+                            <div className="lbl">VERIFIED SUBMISSIONS</div>
+                            <div className="big" style={{ color: '#a78bfa' }}>10 / 11</div>
+                        </div>
+                        <div className="card">
+                            <div className="lbl">EST. COMPLETION</div>
+                            <div className="big" style={{ color: '#facc15', fontSize: 24 }}>Dec 11, 2026</div>
+                        </div>
+                    </div>
+                </>)}
+
+                {/* ───── TAB 5: AI EVALUATION ───── */}
+                {tab === 'ai' && (
+                    <div className="card">
+                        <div className="sh"><Bot size={16} /> INTERN AI EVALUATION & PERFORMANCE</div>
+                        <p style={{ color: '#94a3b8' }}>Awtomatikong sinusuri ng AI ang mga DTR accomplishments at ginagawan ng competency analysis ang bawat intern.</p>
+                    </div>
+                )}
             </main>
 
             {/* Chat Modal */}
             {activeChatLog && (
                 <div className="ovl">
                     <div className="modal">
-                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 12 }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
                             <h3>Chat Thread ({activeChatLog.student_name})</h3>
                             <button className="btn sm" onClick={() => setActiveChatLog(null)}>X</button>
                         </div>
@@ -503,10 +584,15 @@ export default function SupervisorDashboard({ supervisorName = "Jodilyn P. Bombi
                                 </div>
                             ))}
                         </div>
-                        <form onSubmit={handleSendReply} style={{ display: 'flex', gap: 8 }}>
-                            <input className="in" value={replyText} onChange={e => setReplyText(e.target.value)} placeholder="Type a message..." />
-                            <button type="submit" className="btn solid"><Send size={12} /> Send</button>
-                        </form>
+                        <div style={{ display: 'flex', gap: 8 }}>
+                            <input className="in sq" value={replyText} onChange={e => setReplyText(e.target.value)} placeholder="Mag-type ng mensahe..." />
+                            <button className="btn solid" onClick={() => {
+                                if (!replyText.trim()) return;
+                                const newMsg = { sender: 'supervisor', message: replyText };
+                                setActiveChatLog(prev => ({ ...prev, messages: [...(prev.messages || []), newMsg] }));
+                                setReplyText('');
+                            }}><Send size={12} /> Send</button>
+                        </div>
                     </div>
                 </div>
             )}
@@ -516,11 +602,11 @@ export default function SupervisorDashboard({ supervisorName = "Jodilyn P. Bombi
                 <div className="ovl">
                     <div className="modal">
                         <h3 style={{ color: '#f87171', marginBottom: 12 }}>REJECT DTR RECORD</h3>
-                        <p>Maglagay ng dahilan para sa rejection ng DTR log na ito:</p>
-                        <textarea className="in" rows="4" value={rejectionReason} onChange={e => setRejectionReason(e.target.value)} placeholder="Dahilan ng rejection..." style={{ resize: 'none', marginBottom: 14 }} />
+                        <p style={{ color: '#94a3b8', marginBottom: 12 }}>Maglagay ng dahilan para sa rejection ng DTR log na ito:</p>
+                        <textarea className="in sq" rows="4" value={rejectionReason} onChange={e => setRejectionReason(e.target.value)} placeholder="Dahilan ng rejection..." style={{ resize: 'none', marginBottom: 14 }} />
                         <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
                             <button className="btn" onClick={() => setRejectLogTarget(null)}>Cancel</button>
-                            <button className="btn bad" onClick={() => handleUpdateDTRStatus(idOf(rejectLogTarget), 'rejected', rejectionReason)}>Confirm Reject</button>
+                            <button className="btn bad" onClick={() => handleUpdateStatus(idOf(rejectLogTarget), 'rejected', rejectionReason)}>Confirm Reject</button>
                         </div>
                     </div>
                 </div>
