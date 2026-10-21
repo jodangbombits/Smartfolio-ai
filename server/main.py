@@ -33,7 +33,6 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
-
 )
 
 # =====================================================================
@@ -121,6 +120,25 @@ class ResetSchema(BaseModel):
     email: str
     code: str
     new_password: str
+
+class InternProfileSchema(BaseModel):
+    user_id: Optional[int] = None
+    email: Optional[str] = None
+    school: Optional[str] = ""
+    course: Optional[str] = ""
+    year_level: Optional[str] = ""
+    adviser: Optional[str] = ""
+    contact: Optional[str] = ""
+    host_company: Optional[str] = ""
+    department: Optional[str] = ""
+    start_date: Optional[str] = ""
+    end_date: Optional[str] = ""
+    required_hours: Optional[int] = 500
+    moa_ref_no: Optional[str] = ""
+    moa_signed: Optional[bool] = False
+    endorsement_letter: Optional[bool] = False
+    parent_consent: Optional[bool] = False
+    medical_clearance: Optional[bool] = False
 
 
 # =====================================================================
@@ -307,7 +325,6 @@ async def forgot_password(payload: ForgotSchema):
     code = ''.join(random.choices(string.digits, k=6))
     otp_store[email] = code
 
-    # Lalabas ang linyang ito sa Render logs para madaling makuha ang OTP
     print(f"=== RESET CODE FOR {email}: {code} ===")
 
     html = f"""
@@ -362,7 +379,7 @@ async def get_all_users():
 
 
 # =====================================================================
-# FILE UPLOAD ENDPOINT (ADDED FOR PROOF FILES & .JFIF SUPPORT)
+# FILE UPLOAD ENDPOINT (.JFIF, .JPG, .PNG, .PDF SUPPORT)
 # =====================================================================
 @app.post("/api/upload")
 async def upload_proof(file: UploadFile = File(...)):
@@ -470,28 +487,6 @@ async def get_interns():
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-        # =====================================================================
-# INTERN PROFILE SAVE & FETCH ENDPOINTS (FOR SUPERVISOR & STUDENT)
-# =====================================================================
-class InternProfileSchema(BaseModel):
-    user_id: Optional[int] = None
-    email: Optional[str] = None
-    school: Optional[str] = ""
-    course: Optional[str] = ""
-    year_level: Optional[str] = ""
-    adviser: Optional[str] = ""
-    contact: Optional[str] = ""
-    host_company: Optional[str] = ""
-    department: Optional[str] = ""
-    start_date: Optional[str] = ""
-    end_date: Optional[str] = ""
-    required_hours: Optional[int] = 500
-    moa_ref_no: Optional[str] = ""
-    moa_signed: Optional[bool] = False
-    endorsement_letter: Optional[bool] = False
-    parent_consent: Optional[bool] = False
-    medical_clearance: Optional[bool] = False
-
 
 @app.post("/api/intern-profile/save")
 async def save_intern_profile(payload: InternProfileSchema):
@@ -501,7 +496,6 @@ async def save_intern_profile(payload: InternProfileSchema):
         data_dict = payload.dict(exclude_unset=True)
         user_id = payload.user_id or 2
 
-        # I-pack ang lahat ng profile details sa loob ng 'data' JSON string/text column
         record = {
             "user_id": user_id,
             "data": json.dumps(data_dict)
@@ -527,7 +521,6 @@ async def get_intern_profile(identifier: str):
         if identifier.isdigit():
             res = supabase.table("intern_profiles").select("*").eq("user_id", int(identifier)).execute()
         else:
-            # Fallback lookup sa users table para makuha ang user_id via email
             u_res = supabase.table("users").select("id").eq("email", identifier.lower()).execute()
             if u_res.data:
                 target_id = u_res.data[0]["id"]
@@ -553,12 +546,56 @@ async def get_intern_profile(identifier: str):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-        @app.get("/api/interns/{user_id}/profile")
-async def get_intern_profile_alias(user_id: int):
-    return await get_intern_profile(str(user_id))
+
+# =====================================================================
+# DIRECT FRONTEND COMPATIBILITY ENDPOINTS (/api/interns/{id}/profile)
+# =====================================================================
+@app.get("/api/interns/{user_id}/profile")
+async def get_intern_profile_by_id(user_id: int):
+    if not supabase:
+        raise HTTPException(status_code=500, detail="Database client not configured")
+    try:
+        res = supabase.table("intern_profiles").select("*").eq("user_id", user_id).execute()
+        if not res.data:
+            return {}
+
+        raw_row = res.data[0]
+        parsed_data = {}
+        if isinstance(raw_row.get("data"), str):
+            try:
+                parsed_data = json.loads(raw_row["data"])
+            except Exception:
+                parsed_data = {}
+        elif isinstance(raw_row.get("data"), dict):
+            parsed_data = raw_row["data"]
+
+        parsed_data["user_id"] = raw_row.get("user_id")
+        return parsed_data
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 
 @app.post("/api/interns/{user_id}/profile")
 @app.put("/api/interns/{user_id}/profile")
-async def save_intern_profile_alias(user_id: int, payload: InternProfileSchema):
-    payload.user_id = user_id
-    return await save_intern_profile(payload)
+async def save_intern_profile_by_id(user_id: int, payload: InternProfileSchema):
+    if not supabase:
+        raise HTTPException(status_code=500, detail="Database client not configured")
+    try:
+        data_dict = payload.dict(exclude_unset=True)
+        data_dict["user_id"] = user_id
+
+        record = {
+            "user_id": user_id,
+            "data": json.dumps(data_dict)
+        }
+
+        existing = supabase.table("intern_profiles").select("id").eq("user_id", user_id).execute()
+
+        if existing.data:
+            res = supabase.table("intern_profiles").update(record).eq("user_id", user_id).execute()
+        else:
+            res = supabase.table("intern_profiles").insert(record).execute()
+
+        return {"message": "Profile saved successfully", "data": res.data}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
