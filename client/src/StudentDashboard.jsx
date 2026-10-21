@@ -269,8 +269,7 @@ export default function StudentDashboard({ studentName: studentNameProp = 'Stude
     const savedUser = safeUser();
     const info = { ...savedUser, ...(user || {}), ...(studentInfo || {}) };
     // Walang fallback sa fake ID — kung walang user, walang ife-fetch
-    const rawCurrentId = studentInfo?.id || user?.id || savedUser?.id || savedUser?.user_id || null;
-    const currentUserId = rawCurrentId ? Number(String(rawCurrentId).split(':')[0]) : null;
+    const currentUserId = studentInfo?.id || user?.id || savedUser?.id || savedUser?.user_id || null;
     const studentName = studentInfo?.name || studentInfo?.full_name || savedUser?.full_name || savedUser?.name || studentNameProp;
 
     const [logs, setLogs] = useState([]);
@@ -302,12 +301,11 @@ export default function StudentDashboard({ studentName: studentNameProp = 'Stude
 
     const notify = (msg, err = false) => { setToast({ msg, err }); setTimeout(() => setToast(null), 3200); };
 
-    /* — Realtime fetching — */
+    /* ── Realtime fetching ── */
     const fetchDTRLogs = useCallback(async () => {
         if (!currentUserId) return;
         try {
-            const cleanUserId = String(currentUserId).split(':')[0].replace(/[^0-9]/g, '');
-            const res = await fetch(`${API_BASE_URL}/api/dtr/${cleanUserId}`);
+            const res = await fetch(`${API_BASE_URL}/api/dtr/${currentUserId}`);
             if (!res.ok) return;
             const data = await res.json();
             const list = Array.isArray(data) ? data : (data.logs || []);
@@ -318,8 +316,7 @@ export default function StudentDashboard({ studentName: studentNameProp = 'Stude
     const fetchInternProfile = useCallback(async () => {
         if (!currentUserId) return;
         try {
-            const cleanUserId = String(currentUserId).split(':')[0].replace(/[^0-9]/g, '');
-            const res = await fetch(`${API_BASE_URL}/api/interns/${cleanUserId}/profile`);
+            const res = await fetch(`${API_BASE_URL}/api/interns/${currentUserId}/profile`);
             if (res.ok) {
                 const data = normProfile(await res.json());
                 setInternProfile(prev => sameJson(prev, data));
