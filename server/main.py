@@ -412,6 +412,9 @@ async def upload_proof(file: UploadFile = File(...)):
         raise HTTPException(status_code=500, detail=f"Upload failed: {str(e)}")
 
 
+# =====================================================================
+# DTR ENDPOINTS
+# =====================================================================
 @app.post("/api/dtr/submit")
 async def submit_dtr(request: Request):
     if not supabase:
@@ -454,14 +457,23 @@ async def submit_dtr(request: Request):
             try:
                 res = supabase.table("dtr_logs").update(log_data).eq("id", int(dtr_id)).execute()
             except Exception:
-                # Fallback kung sakaling hiwalay ang rejection_reason/remarks column
+                # Fallback kung sakaling walang 'remarks' o 'rejection_reason' column sa schema
                 log_data.pop("remarks", None)
-                res = supabase.table("dtr_logs").update(log_data).eq("id", int(dtr_id)).execute()
+                try:
+                    res = supabase.table("dtr_logs").update(log_data).eq("id", int(dtr_id)).execute()
+                except Exception:
+                    log_data.pop("rejection_reason", None)
+                    res = supabase.table("dtr_logs").update(log_data).eq("id", int(dtr_id)).execute()
         else:
             # Mag-insert ng bagong DTR row
-            res = supabase.table("dtr_logs").insert(log_data).execute()
+            try:
+                res = supabase.table("dtr_logs").insert(log_data).execute()
+            except Exception:
+                log_data.pop("remarks", None)
+                log_data.pop("rejection_reason", None)
+                res = supabase.table("dtr_logs").insert(log_data).execute()
 
-        return {"status": "success", "message": "DTR saved successfully", "data": res.data}
+        return {"status": "success", "message": "DTR saved successfully", "data": res.data if hasattr(res, 'data') else None}
     except Exception as e:
         print("DTR SUBMIT ERROR:", str(e))
         raise HTTPException(status_code=500, detail=str(e))
