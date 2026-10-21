@@ -436,7 +436,7 @@ async def submit_dtr(request: Request):
 
         # Kapag resubmit, pabalikin sa 'pending' at linisin ang rejection fields
         log_data = {
-            "user_id": user_id,
+            "user_id": int(user_id) if user_id else None,
             "log_date": log_date,
             "time_in": time_in,
             "time_out": time_out,
@@ -445,12 +445,18 @@ async def submit_dtr(request: Request):
             "accomplishment": raw_notes,
             "proof_url": proof_url,
             "status": "pending",
-            "rejection_reason": ""
+            "rejection_reason": "",
+            "remarks": ""
         }
 
         if dtr_id:
             # I-update ang umiiral na DTR row sa Supabase
-            res = supabase.table("dtr_logs").update(log_data).eq("id", int(dtr_id)).execute()
+            try:
+                res = supabase.table("dtr_logs").update(log_data).eq("id", int(dtr_id)).execute()
+            except Exception:
+                # Fallback kung sakaling hiwalay ang rejection_reason/remarks column
+                log_data.pop("remarks", None)
+                res = supabase.table("dtr_logs").update(log_data).eq("id", int(dtr_id)).execute()
         else:
             # Mag-insert ng bagong DTR row
             res = supabase.table("dtr_logs").insert(log_data).execute()
