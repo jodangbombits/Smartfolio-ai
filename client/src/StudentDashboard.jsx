@@ -268,7 +268,6 @@ export default function StudentDashboard({ studentName: studentNameProp = 'Stude
             if (res.ok) {
                 const rawData = await res.json();
 
-                // Kung sakaling naka-nest sa inside 'data' property o JSON string
                 let profileObj = rawData;
                 if (rawData && rawData.data) {
                     if (typeof rawData.data === 'string') {
@@ -278,7 +277,6 @@ export default function StudentDashboard({ studentName: studentNameProp = 'Stude
                     }
                 }
 
-                // Normalization para sigurado ang rendering sa UI
                 const normalized = {
                     ...profileObj,
                     school: profileObj.school || profileObj.p_school || "",
