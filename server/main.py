@@ -502,6 +502,53 @@ async def update_dtr_status_alias(log_id: int, request: Request):
         return {"status": "success", "message": "Status updated"}
 
 
+from pydantic import BaseModel
+from typing import Optional
+
+class StatusUpdate(BaseModel):
+    status: str
+    rejection_reason: Optional[str] = None
+    remarks: Optional[str] = None
+    supervisor_comment: Optional[str] = None
+
+# 1. Endpoint para sa pag-update ng Status (Approve / Reject)
+@app.post("/api/dtr-logs/{log_id}/status")
+@app.post("/api/dtr/{log_id}/status")
+async def update_dtr_status(log_id: int, payload: StatusUpdate):
+    reason = payload.rejection_reason or payload.remarks or payload.supervisor_comment or ""
+    status = payload.status.lower()
+    
+    # I-update ang DTR Record sa Supabase / Database
+    # Halimbawa sa Supabase/SQL query:
+    response = supabase.table("dtr_logs").update({
+        "status": status,
+        "rejection_reason": reason,
+        "remarks": reason
+    }).eq("id", log_id).execute()
+    
+    return {"message": "Status updated successfully", "status": status, "rejection_reason": reason}
+
+# 2. Endpoint para sa Messages / Chat Thread (Realtime Chat)
+class MessagePayload(BaseModel):
+    sender: str
+    message: str
+
+@app.post("/api/dtr/{log_id}/messages")
+async def add_dtr_message(log_id: int, payload: MessagePayload):
+    # Kuhanin muna ang kasalukuyang messages array sa DB
+    dtr = supabase.table("dtr_logs").select("messages").eq("id", log_id).single().execute()
+    existing_messages = dtr.data.get("messages") or [] if dtr.data else []
+    
+    new_msg = {
+        "sender": payload.sender,
+        "message": payload.message,
+        "timestamp": datetime.now().strftime("%I:%M %p")
+    }
+    existing_messages.append(new_msg)
+    
+    supabase.table("dtr_logs").update({"messages": existing_messages}).eq("id", log_id).execute()
+    return {"message": "Message sent", "messages": existing_messages}
+
 # =====================================================================
 # INTERN PROFILES ENDPOINTS
 # =====================================================================
