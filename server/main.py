@@ -501,7 +501,7 @@ async def get_dtr_logs(user_id: int):
             log_id = log.get("id")
             if log_id:
                 try:
-                    remarks_res = supabase.table("dtr_remarks").select("*").eq("dtr_id", log_id).order("id", asc=True).execute()
+                    remarks_res = supabase.table("dtr_remarks").select("*").eq("dtr_id", log_id).order("id", asc=False).execute()
                     formatted_msgs = []
                     for r in remarks_res.data or []:
                         formatted_msgs.append({
