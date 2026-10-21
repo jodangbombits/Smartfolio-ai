@@ -1,22 +1,15 @@
-import hashlib
-import hmac
 import json
 import logging
-import mimetypes
 import os
 import random
-import re
-import secrets
 import string
 import time
 import urllib.error
-import urllib.parse
 import urllib.request
-import uuid
 from datetime import datetime
 from typing import Optional
 
-from fastapi import FastAPI, File, HTTPException, Request, Response, UploadFile
+from fastapi import FastAPI, File, HTTPException, Request, UploadFile
 from fastapi.concurrency import run_in_threadpool
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -44,6 +37,7 @@ SENDER_EMAIL = os.environ.get("SENDER_EMAIL", "jodangbombits@gmail.com")
 SENDER_NAME = "SmartFolio OJT"
 
 SUPABASE_URL = os.environ.get("SUPABASE_URL", "").rstrip("/")
+# TODO: ilipat sa .env at i-regenerate ang key bago i-push sa GitHub
 SUPABASE_KEY = os.environ.get("SUPABASE_KEY", os.environ.get("SUPABASE_SERVICE_KEY", "sb_publishable_9pL9sflzmQVmRzdIAlI6sw_mrwL1MEL"))
 
 supabase: Optional[Client] = None
@@ -118,10 +112,17 @@ class InternProfileSchema(BaseModel):
     end_date: Optional[str] = ""
     required_hours: Optional[int] = 500
     moa_ref_no: Optional[str] = ""
+    moa_date_signed: Optional[str] = ""
+    moa_valid_until: Optional[str] = ""
+    moa_file_url: Optional[str] = ""
     moa_signed: Optional[bool] = False
     endorsement_letter: Optional[bool] = False
     parent_consent: Optional[bool] = False
     medical_clearance: Optional[bool] = False
+    ratings: Optional[dict] = None
+
+    class Config:
+        extra = "allow"
 
 
 # =====================================================================
@@ -155,13 +156,51 @@ def send_email_sync(to_email: str, subject: str, html: str):
         raise Exception(f"Brevo {e.code}: {detail}")
 
 
+PROFILE_ALIASES = {
+    "moa_signed": "moaSigned",
+    "moa_ref_no": "moaNumber",
+    "moa_file_url": "moaFileUrl",
+    "moa_valid_until": "moaValidUntil",
+    "moa_date_signed": "moaDateSigned",
+    "required_hours": "requiredHours",
+    "endorsement_letter": "endorsementLetter",
+    "parent_consent": "parentConsent",
+    "medical_clearance": "medicalClearance",
+    "host_company": "hostCompany",
+    "year_level": "yearLevel",
+}
+
+
+def parse_profile_row(row: dict) -> dict:
+    data_val = row.get("data")
+    parsed = {}
+    if isinstance(data_val, str):
+        try:
+            parsed = json.loads(data_val)
+        except Exception:
+            parsed = {}
+    elif isinstance(data_val, dict):
+        parsed = dict(data_val)
+    parsed["user_id"] = row.get("user_id")
+    return parsed
+
+
+def normalize_profile(d: dict) -> dict:
+    """Dagdagan ng camelCase aliases para gumana sa StudentDashboard."""
+    out = dict(d)
+    for snake, camel in PROFILE_ALIASES.items():
+        if snake in out and camel not in out:
+            out[camel] = out[snake]
+    return out
+
+
 @app.get("/")
 async def health():
     return {"status": "ok", "service": "SmartFolio API Running Live!"}
 
 
 # =====================================================================
-# AUTH & OTP ENDPOINTS (RESTORED!)
+# AUTH & OTP ENDPOINTS
 # =====================================================================
 @app.post("/api/send-otp")
 async def send_otp(payload: OTPRequestSchema):
@@ -231,7 +270,7 @@ async def login_user(payload: LoginSchema):
         res = supabase.table("users").select("*").eq("email", email).execute()
         if not res.data:
             raise HTTPException(status_code=401, detail="Invalid email or password")
-        
+
         user = res.data[0]
         if user.get("password") != payload.password:
             raise HTTPException(status_code=401, detail="Invalid email or password")
@@ -346,18 +385,19 @@ async def get_all_users():
 
 
 # =====================================================================
-# UPLOAD ENDPOINT
+# UPLOAD ENDPOINT (proof ng student + MOA file ng supervisor)
 # =====================================================================
 @app.post("/api/upload")
 async def upload_proof(file: UploadFile = File(...)):
     try:
         file_ext = os.path.splitext(file.filename)[1].lower()
         allowed_extensions = [".png", ".jpg", ".jpeg", ".jfif", ".webp", ".pdf"]
-        
+
         if file_ext not in allowed_extensions:
             raise HTTPException(status_code=400, detail="Unsupported file format")
 
-        filename = f"{int(time.time())}_{file.filename}"
+        safe_name = os.path.basename(file.filename).replace(" ", "_")
+        filename = f"{int(time.time())}_{safe_name}"
         file_path = os.path.join(UPLOAD_DIR, filename)
 
         with open(file_path, "wb") as f:
@@ -389,7 +429,7 @@ async def submit_dtr(request: Request):
     time_out = str(payload.get("time_out") or payload.get("timeOut") or "")
     raw_notes = str(payload.get("accomplishment") or payload.get("raw_notes") or payload.get("notes") or "")
     proof_url = str(payload.get("proof_url") or payload.get("proofUrl") or "")
-    
+
     raw_hours = payload.get("rendered_today") or payload.get("renderedHours") or 8.0
     try:
         rendered_today = float(raw_hours)
@@ -429,7 +469,7 @@ async def get_all_dtr_logs(user_id: Optional[int] = None):
         query = supabase.table("dtr_logs").select("*, users(full_name)").order("id", desc=True)
         if user_id:
             query = query.eq("user_id", user_id)
-        
+
         res = query.execute()
         logs = []
         for r in res.data or []:
@@ -454,22 +494,46 @@ async def get_dtr_logs(user_id: int):
 
 @app.post("/api/dtr-logs/{log_id}/status")
 @app.post("/api/dtr/{log_id}/status")
-async def update_dtr_status(log_id: int, payload: StatusUpdateSchema):
+async def update_dtr_status(log_id: int, request: Request):
     if not supabase:
         raise HTTPException(status_code=500, detail="Database client not configured")
-    
-    reason = payload.rejection_reason or payload.remarks or payload.supervisor_comment or ""
-    status = payload.status.lower()
-    
+
+    payload = await request.json()
+    status_val = str(payload.get("status") or "pending").lower()
+    if status_val not in ("pending", "approved", "rejected"):
+        raise HTTPException(status_code=400, detail="Invalid status")
+
+    reason = str(
+        payload.get("rejection_reason")
+        or payload.get("remarks")
+        or payload.get("supervisor_comment")
+        or ""
+    )
+
     try:
-        res = supabase.table("dtr_logs").update({
-            "status": status,
+        # 1. Update status lang muna sa dtr_logs table
+        res = supabase.table("dtr_logs").update({"status": status_val}).eq("id", log_id).execute()
+
+        # 2. Kapag may rejection message at naging rejected, mag-insert sa dtr_remarks table
+        if reason and status_val == "rejected":
+            try:
+                supabase.table("dtr_remarks").insert({
+                    "dtr_id": log_id,
+                    "sender_name": "supervisor",
+                    "sender_role": "supervisor",
+                    "message": f"REJECTED: {reason}"
+                }).execute()
+            except Exception as remark_err:
+                print("Failed to save to dtr_remarks:", str(remark_err))
+
+        return {
+            "status": "success",
+            "updated_status": status_val,
             "rejection_reason": reason,
-            "remarks": reason
-        }).eq("id", log_id).execute()
-        
-        return {"message": "Status updated successfully", "status": status, "rejection_reason": reason, "data": res.data}
+            "data": res.data
+        }
     except Exception as e:
+        print("UPDATE ERROR:", str(e))
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -477,19 +541,19 @@ async def update_dtr_status(log_id: int, payload: StatusUpdateSchema):
 async def add_dtr_message(log_id: int, payload: MessagePayload):
     if not supabase:
         raise HTTPException(status_code=500, detail="Database client not configured")
-        
+
     try:
         dtr = supabase.table("dtr_logs").select("messages").eq("id", log_id).single().execute()
-        existing_messages = dtr.data.get("messages") or [] if dtr.data else []
-        
+        existing_messages = (dtr.data.get("messages") or []) if dtr.data else []
+
         new_msg = {
             "sender": payload.sender,
             "message": payload.message,
             "timestamp": datetime.now().strftime("%I:%M %p")
         }
         existing_messages.append(new_msg)
-        
-        res = supabase.table("dtr_logs").update({"messages": existing_messages}).eq("id", log_id).execute()
+
+        supabase.table("dtr_logs").update({"messages": existing_messages}).eq("id", log_id).execute()
         return {"message": "Message sent", "messages": existing_messages}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -509,6 +573,19 @@ async def get_interns():
         raise HTTPException(status_code=500, detail=str(e))
 
 
+# NOTE: dapat nasa itaas ito ng /api/interns/{user_id}/profile (okay na rin dito dahil magkaiba ang path)
+@app.get("/api/interns/profiles")
+async def get_all_intern_profiles():
+    if not supabase:
+        return {}
+    try:
+        res = supabase.table("intern_profiles").select("*").execute()
+        return {str(r.get("user_id")): normalize_profile(parse_profile_row(r)) for r in (res.data or [])}
+    except Exception as e:
+        print("GET ALL PROFILES ERROR:", str(e))
+        return {}
+
+
 @app.get("/api/interns/{user_id}/profile")
 async def get_intern_profile_by_id(user_id: int):
     if not supabase:
@@ -517,21 +594,7 @@ async def get_intern_profile_by_id(user_id: int):
         res = supabase.table("intern_profiles").select("*").eq("user_id", user_id).execute()
         if not res.data:
             return {}
-
-        raw_row = res.data[0]
-        parsed_data = {}
-        data_val = raw_row.get("data")
-        
-        if isinstance(data_val, str):
-            try:
-                parsed_data = json.loads(data_val)
-            except Exception:
-                parsed_data = {}
-        elif isinstance(data_val, dict):
-            parsed_data = data_val
-
-        parsed_data["user_id"] = raw_row.get("user_id")
-        return parsed_data
+        return normalize_profile(parse_profile_row(res.data[0]))
     except Exception as e:
         print("GET PROFILE ERROR:", str(e))
         return {}
@@ -543,13 +606,23 @@ async def save_intern_profile_by_id(user_id: int, payload: InternProfileSchema):
     if not supabase:
         raise HTTPException(status_code=500, detail="Database client not configured")
     try:
-        data_dict = payload.dict(exclude_unset=True)
-        data_dict["user_id"] = user_id
-        json_str = json.dumps(data_dict, default=str)
+        existing = supabase.table("intern_profiles").select("*").eq("user_id", user_id).execute()
 
-        existing = supabase.table("intern_profiles").select("id").eq("user_id", user_id).execute()
+        merged = {}
+        if existing.data:
+            merged = parse_profile_row(existing.data[0])
 
-        if existing.data and len(existing.data) > 0:
+        incoming = payload.dict(exclude_unset=True)
+        # tanggalin ang camelCase aliases para hindi mag-conflict sa snake_case
+        for camel in PROFILE_ALIASES.values():
+            incoming.pop(camel, None)
+            merged.pop(camel, None)
+
+        merged.update(incoming)
+        merged["user_id"] = user_id
+        json_str = json.dumps(merged, default=str)
+
+        if existing.data:
             res = supabase.table("intern_profiles").update({"data": json_str}).eq("user_id", user_id).execute()
         else:
             res = supabase.table("intern_profiles").insert({"user_id": user_id, "data": json_str}).execute()
