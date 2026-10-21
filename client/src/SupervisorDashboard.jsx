@@ -16,16 +16,24 @@ const statusOf = (l) => (l.status || 'pending').toLowerCase();
 const dateOf = (l) => l.log_date || l.date || '';
 const msgText = (m) => typeof m === 'string' ? m : (m.message || m.text || m.remark || m.content || '');
 const fullUrl = (u) => !u ? null : /^https?:\/\//i.test(u) ? u : `${API}${u.startsWith('/') ? '' : '/'}${u}`;
+
+const cleanId = (id) => {
+    if (!id) return '';
+    return String(id).split(':')[0].replace(/[^0-9]/g, '');
+};
+
 const isSup = (m) => {
     if (!m) return false;
     const role = String(m.sender_role || m.sender_name || m.sender || '').toLowerCase();
     return role === 'supervisor';
-    const needsReply = (l) => {
-        if (!l || !Array.isArray(l.messages) || l.messages.length === 0) return false;
-        const lastMsg = l.messages[l.messages.length - 1];
-        // Naghihintay ng reply kapag HINDI galing sa supervisor ang huling message
-        return !isSup(lastMsg);
-    };
+};
+
+const needsReply = (l) => {
+    if (!l || !Array.isArray(l.messages) || l.messages.length === 0) return false;
+    const lastMsg = l.messages[l.messages.length - 1];
+    return !isSup(lastMsg);
+};
+
 const keyOf = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 const parseLocal = (s) => { const [y, m, d] = String(s).slice(0, 10).split('-').map(Number); return (y && m && d) ? new Date(y, m - 1, d) : null; };
 const weekStartKey = (s) => { const d = parseLocal(s) || new Date(); d.setDate(d.getDate() - ((d.getDay() + 6) % 7)); return keyOf(d); };
@@ -160,7 +168,7 @@ const CSS = `
 .icard:hover,.icard.on{border-color:var(--cy);background:rgba(34,211,238,.1);box-shadow:0 0 16px rgba(34,211,238,.2)}
 .ell{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .fl{display:block;font-size:10.5px;letter-spacing:.12em;color:var(--mut);text-transform:uppercase;margin-bottom:6px}
-.in{width:100%;background:rgba(15,23,42,.8);border:1px solid var(--line);border-radius:9px;padding:10px 12px;color:#fff;font:inherit;outline:0;color-scheme:dark}
+.in{width:100%;background:rgba(15,23,42,.8);border:1px solid var(--line);border-radius:99px;padding:10px 12px;color:#fff;font:inherit;outline:0;color-scheme:dark}
 .in:read-only{opacity:.7}
 .chk{display:flex;align-items:center;gap:10px;padding:11px 12px;border:1px solid rgba(52,211,153,.35);border-radius:10px;background:rgba(52,211,153,.07);cursor:pointer;margin-bottom:10px}
 .chk input{width:16px;height:16px;accent-color:#22d3ee}
@@ -178,7 +186,7 @@ const CSS = `
 .role{display:flex;justify-content:space-between;align-items:center;padding:12px;margin-bottom:10px;border:1px solid rgba(167,139,250,.35);border-radius:10px;background:rgba(15,23,42,.8)}
 .ovl{position:fixed;inset:0;background:rgba(2,6,18,.8);backdrop-filter:blur(6px);display:grid;place-items:center;z-index:200;padding:16px}
 .modal{width:min(520px,100%);max-height:92vh;overflow:auto;background:#0a1020;border:1px solid var(--line);border-radius:16px;padding:22px;box-shadow:0 0 50px rgba(34,211,238,.18)}
-.bub{max-width:85%;padding:9px 12px;font-size:12.5px;line-height:1.5;word-break:break-word;color:#fff}
+.bub{max-width:85%;padding:99px 12px;font-size:12.5px;line-height:1.5;word-break:break-word;color:#fff}
 .bub.me{background:#0e7490;border-radius:14px 14px 3px 14px}
 .bub.other{background:rgba(167,139,250,.16);border:1px solid rgba(167,139,250,.4);border-radius:14px 14px 14px 3px}
 .toast{position:fixed;right:20px;bottom:20px;z-index:400;padding:12px 16px;border-radius:10px;background:#0a1020;border:1px solid var(--ok);color:var(--ok);box-shadow:0 0 24px rgba(52,211,153,.3)}
@@ -266,9 +274,15 @@ export default function SupervisorDashboard({ supervisorName: supProp, onLogout 
 
     /* ── Derived ── */
     const isAll = selectedId === 'all';
-    const selectedIntern = isAll ? null : interns.find(i => String(i.id) === String(selectedId)) || null;
+    const selectedIntern = isAll ? null : interns.find(i => cleanId(i.id) === cleanId(selectedId)) || null;
     const selectedProfile = isAll ? null : (profiles[selectedId] || normProfile({}));
-    const scopeLogs = useMemo(() => isAll ? logs : logs.filter(l => Number(l.user_id) === Number(selectedId)), [logs, selectedId, isAll]);
+
+    // Tiyaking maayos ang filtering gamit ang cleanId
+    const scopeLogs = useMemo(() => {
+        if (isAll) return logs;
+        return logs.filter(l => cleanId(l.user_id) === cleanId(selectedId));
+    }, [logs, selectedId, isAll]);
+
     const requiredHours = isAll ? interns.length * DEFAULT_HOURS || DEFAULT_HOURS : (Number(selectedProfile?.required_hours) || DEFAULT_HOURS);
     const scopeName = isAll ? 'All Interns' : (selectedIntern?.full_name || 'Intern');
     const today = useMemo(() => { const d = new Date(); d.setHours(0, 0, 0, 0); return d; }, []);
@@ -374,7 +388,7 @@ export default function SupervisorDashboard({ supervisorName: supProp, onLogout 
         if (isAll) return;
         setSaving(true);
         try {
-            const body = { ...form, user_id: Number(selectedId), ratings, required_hours: Number(form.required_hours) || DEFAULT_HOURS };
+            const body = { ...form, user_id: Number(cleanId(selectedId)), ratings, required_hours: Number(form.required_hours) || DEFAULT_HOURS };
             const res = await fetch(`${API}/api/interns/${selectedId}/profile`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
             if (!res.ok) throw new Error();
             setProfiles(prev => ({ ...prev, [selectedId]: normProfile(body) }));
@@ -430,7 +444,7 @@ ${rows.map(l => `<tr><td>${esc(l.student_name)}</td><td>${esc(dateOf(l))}</td><t
         <div className="irow">
             {[{ id: 'all', full_name: 'All Interns' }, ...interns].map(item => {
                 const all = item.id === 'all';
-                const L = all ? logs : logs.filter(l => Number(l.user_id) === Number(item.id));
+                const L = all ? logs : logs.filter(l => cleanId(l.user_id) === cleanId(item.id));
                 const pend = L.filter(l => !['approved', 'rejected'].includes(statusOf(l))).length;
                 const rep = L.filter(needsReply).length;
                 const hrs = L.filter(l => statusOf(l) === 'approved').reduce((s, l) => s + hrsOf(l), 0);
