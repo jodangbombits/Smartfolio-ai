@@ -27,9 +27,29 @@ const safeUser = () => { try { return JSON.parse(localStorage.getItem('user') ||
 
 const getRejectionRemark = (log) => {
     if (!log) return '';
-    return log.rejection_reason || log.remarks || log.supervisor_comment || log.supervisor_remark || log.rejectionReason || log.reason || '';
-};
 
+    // 1. Unang icheck ang direct column fields mula sa dtr_logs table
+    if (log.rejection_reason && log.rejection_reason.trim()) return log.rejection_reason;
+    if (log.remarks && typeof log.remarks === 'string' && log.remarks.trim()) return log.remarks;
+    if (log.supervisor_comment && log.supervisor_comment.trim()) return log.supervisor_comment;
+
+    // 2. Kung wala doon, icheck ang messages o remarks array
+    if (Array.isArray(log.messages) && log.messages.length > 0) {
+        const lastSupMsg = [...log.messages].reverse().find(m => m.sender === 'supervisor' || m.sender_role === 'supervisor');
+        if (lastSupMsg && (lastSupMsg.message || lastSupMsg.text)) {
+            return (lastSupMsg.message || lastSupMsg.text).replace(/^REJECTED:\s*/i, '');
+        }
+    }
+
+    if (Array.isArray(log.remarks) && log.remarks.length > 0) {
+        const lastRemark = log.remarks[log.remarks.length - 1];
+        if (typeof lastRemark === 'string') return lastRemark;
+        if (lastRemark && lastRemark.message) return lastRemark.message.replace(/^REJECTED:\s*/i, '');
+    }
+
+    // 3. Fallback lang kung talagang walang itinype ang supervisor
+    return 'Walang inilagay na tiyak na dahilan ang supervisor.';
+};
 const fmtDate = (s) => { const d = s instanceof Date ? s : parseLocal(s); return d ? d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '—'; };
 const fullUrl = (u) => !u ? null : /^https?:\/\//i.test(u) ? u : `${API_BASE_URL}${u.startsWith('/') ? '' : '/'}${u}`;
 
