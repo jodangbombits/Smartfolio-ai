@@ -581,21 +581,27 @@ async def save_intern_profile_by_id(user_id: int, payload: InternProfileSchema):
     if not supabase:
         raise HTTPException(status_code=500, detail="Database client not configured")
     try:
-        data_dict = payload.dict(exclude_unset=True)
+        # Kunin ang JSON representation mula sa schema
+        data_dict = payload.model_dump(exclude_unset=True) if hasattr(payload, "model_dump") else payload.dict(exclude_unset=True)
         data_dict["user_id"] = user_id
+
+        # I-serialize sa JSON string para sa Supabase 'data' column
+        json_string_data = json.dumps(data_dict)
 
         record = {
             "user_id": user_id,
-            "data": json.dumps(data_dict)
+            "data": json_string_data
         }
 
+        # Tingnan kung may umiiral nang profile ang user_id
         existing = supabase.table("intern_profiles").select("id").eq("user_id", user_id).execute()
 
-        if existing.data:
+        if existing.data and len(existing.data) > 0:
             res = supabase.table("intern_profiles").update(record).eq("user_id", user_id).execute()
         else:
             res = supabase.table("intern_profiles").insert(record).execute()
 
         return {"message": "Profile saved successfully", "data": res.data}
     except Exception as e:
+        logging.error(f"Save Profile Error: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
