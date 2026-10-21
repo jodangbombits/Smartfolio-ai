@@ -498,24 +498,21 @@ async def save_intern_profile(payload: InternProfileSchema):
     if not supabase:
         raise HTTPException(status_code=500, detail="Database client not configured")
     try:
-        data = payload.dict(exclude_unset=True)
-        query = supabase.table("intern_profiles").select("*")
-        if payload.user_id:
-            query = query.eq("user_id", payload.user_id)
-        elif payload.email:
-            query = query.eq("email", payload.email)
+        data_dict = payload.dict(exclude_unset=True)
+        user_id = payload.user_id or 2
 
-        existing = query.execute()
+        # I-pack ang lahat ng profile details sa loob ng 'data' JSON string/text column
+        record = {
+            "user_id": user_id,
+            "data": json.dumps(data_dict)
+        }
+
+        existing = supabase.table("intern_profiles").select("*").eq("user_id", user_id).execute()
 
         if existing.data:
-            res = (
-                supabase.table("intern_profiles")
-                .update(data)
-                .eq("id", existing.data[0]["id"])
-                .execute()
-            )
+            res = supabase.table("intern_profiles").update(record).eq("user_id", user_id).execute()
         else:
-            res = supabase.table("intern_profiles").insert(data).execute()
+            res = supabase.table("intern_profiles").insert(record).execute()
 
         return {"message": "Profile saved successfully", "data": res.data}
     except Exception as e:
@@ -528,20 +525,30 @@ async def get_intern_profile(identifier: str):
         raise HTTPException(status_code=500, detail="Database client not configured")
     try:
         if identifier.isdigit():
-            res = (
-                supabase.table("intern_profiles")
-                .select("*")
-                .eq("user_id", int(identifier))
-                .execute()
-            )
+            res = supabase.table("intern_profiles").select("*").eq("user_id", int(identifier)).execute()
         else:
-            res = (
-                supabase.table("intern_profiles")
-                .select("*")
-                .eq("email", identifier.lower())
-                .execute()
-            )
+            # Fallback lookup sa users table para makuha ang user_id via email
+            u_res = supabase.table("users").select("id").eq("email", identifier.lower()).execute()
+            if u_res.data:
+                target_id = u_res.data[0]["id"]
+                res = supabase.table("intern_profiles").select("*").eq("user_id", target_id).execute()
+            else:
+                return {}
 
-        return res.data[0] if res.data else {}
+        if not res.data:
+            return {}
+
+        raw_row = res.data[0]
+        parsed_data = {}
+        if isinstance(raw_row.get("data"), str):
+            try:
+                parsed_data = json.loads(raw_row["data"])
+            except Exception:
+                parsed_data = {}
+        elif isinstance(raw_row.get("data"), dict):
+            parsed_data = raw_row["data"]
+
+        parsed_data["user_id"] = raw_row.get("user_id")
+        return parsed_data
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
