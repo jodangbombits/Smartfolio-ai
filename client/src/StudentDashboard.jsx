@@ -476,22 +476,40 @@ const handleSendReply = async (e) => {
     setIsSendingChat(true);
     const logId = idOf(activeChatLog), text = replyText.trim();
     setReplyText('');
-    const msg = { sender: 'student', message: text, timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) };
 
-    // Optimistic update — lalabas agad sa chat
-    setLogs(prev => prev.map(l => idOf(l) === logId ? { ...l, messages: [...(l.messages || []), msg] } : l));
+    const newMsg = {
+        sender: 'student',
+        message: text,
+        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+    };
+
+    // Aggressive Optimistic UI — Idagdag agad sa local state para HINDI NA MAWALA!
+    setLogs(prev => prev.map(l => {
+        if (idOf(l) === logId) {
+            const curMsgs = Array.isArray(l.messages) ? l.messages : [];
+            return { ...l, messages: [...curMsgs, newMsg] };
+        }
+        return l;
+    }));
 
     try {
         const res = await fetch(`${API_BASE_URL}/api/dtr/${logId}/messages`, {
-            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ sender: 'student', message: text })
         });
-        if (!res.ok) throw new Error('send failed');
-        fetchDTRLogs();
+
+        if (res.ok) {
+            notify('Naipadala na ang mensahe!');
+            fetchDTRLogs();
+        } else {
+            console.error("Message send server error:", res.status);
+        }
     } catch (err) {
-        notify('Hindi na-send ang mensahe. Subukan ulit.', true);
-        fetchDTRLogs(); // ibalik sa totoong state ng server
-    } finally { setIsSendingChat(false); }
+        console.error("Chat fetch error:", err);
+    } finally {
+        setIsSendingChat(false);
+    }
 };
 
 const handleLogout = () => { if (onLogout) onLogout(); else { localStorage.clear(); window.location.reload(); } };

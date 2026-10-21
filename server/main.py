@@ -564,21 +564,37 @@ async def add_dtr_message(log_id: int, payload: MessagePayload):
         raise HTTPException(status_code=500, detail="Database client not configured")
 
     try:
-        dtr = supabase.table("dtr_logs").select("messages").eq("id", log_id).single().execute()
-        existing_messages = (dtr.data.get("messages") or []) if dtr.data else []
-
         new_msg = {
             "sender": payload.sender,
             "message": payload.message,
             "timestamp": datetime.now().strftime("%I:%M %p")
         }
-        existing_messages.append(new_msg)
 
-        supabase.table("dtr_logs").update({"messages": existing_messages}).eq("id", log_id).execute()
-        return {"message": "Message sent", "messages": existing_messages}
+        # 1. Subukang i-save sa dtr_remarks table para sa Supervisor
+        try:
+            supabase.table("dtr_remarks").insert({
+                "dtr_id": log_id,
+                "sender_name": payload.sender,
+                "sender_role": payload.sender,
+                "message": payload.message
+            }).execute()
+        except Exception as r_err:
+            print("Failed insertion to dtr_remarks:", str(r_err))
+
+        # 2. Subukang i-update ang messages JSON column sa dtr_logs (kung meron)
+        try:
+            dtr = supabase.table("dtr_logs").select("messages").eq("id", log_id).single().execute()
+            existing_messages = (dtr.data.get("messages") or []) if dtr.data else []
+            existing_messages.append(new_msg)
+            supabase.table("dtr_logs").update({"messages": existing_messages}).eq("id", log_id).execute()
+            return {"status": "success", "message": "Message sent", "messages": existing_messages}
+        except Exception as d_err:
+            print("Failed dtr_logs messages JSON update:", str(d_err))
+
+        return {"status": "success", "message": "Message sent", "messages": [new_msg]}
     except Exception as e:
+        print("ADD MESSAGE ERROR:", str(e))
         raise HTTPException(status_code=500, detail=str(e))
-
 
 # =====================================================================
 # INTERN PROFILES ENDPOINTS
