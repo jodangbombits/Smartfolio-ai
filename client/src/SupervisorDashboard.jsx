@@ -148,6 +148,7 @@ export default function SupervisorDashboard({ supervisorName: supProp, onLogout 
         } catch (e) { console.error("Error fetching logs:", e); }
     }, []);
 
+    // 1. Ayusin ang fetchInternProfile (Siguraduhing may /api/ sa URL)
     const fetchInternProfile = useCallback(async (userId) => {
         if (!userId || userId === 'all') return;
         try {
@@ -186,34 +187,7 @@ export default function SupervisorDashboard({ supervisorName: supProp, onLogout 
         } catch (e) { console.error("Error fetching profile:", e); }
     }, []);
 
-    useEffect(() => {
-        fetchInternsList();
-        fetchAllLogs();
-        const interval = setInterval(() => { fetchAllLogs(); fetchInternsList(); }, 2000);
-        return () => clearInterval(interval);
-    }, [fetchAllLogs, fetchInternsList]);
-
-    useEffect(() => {
-        if (selectedInternId !== 'all') fetchInternProfile(selectedInternId);
-    }, [selectedInternId, fetchInternProfile]);
-
-    const handleSaveProfile = async (e) => {
-        e.preventDefault();
-        const targetId = selectedInternId === 'all' ? (interns[0]?.id || 2) : selectedInternId;
-        try {
-            const payload = { user_id: Number(targetId), ...profileForm };
-            const res = await fetch(`${API_BASE_URL}/api/interns/${targetId}/profile`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(payload)
-            });
-            if (res.ok) {
-                notify("Matagumpay na na-save ang Profile sa database!");
-            } else {
-                notify("Hindi ma-save ang Profile. Subukang muli.", true);
-            }
-        } catch (e) { notify("Error sa pag-save ng profile.", true); }
-    };
+    // 2. Ayusin ang handleUpdateStatus para sa Reject Action
     const handleUpdateStatus = async (logId, status, reason = '') => {
         try {
             const payload = {
@@ -223,21 +197,8 @@ export default function SupervisorDashboard({ supervisorName: supProp, onLogout 
                 supervisor_comment: reason
             };
 
-            const res = await fetch(`${API_BASE_URL}/api/dtr-logs/${logId}/status`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(payload)
-            });
-
-            // Tanggapin ang response kung ok or 200/201
-            if (res.ok) {
-                notify(`DTR Status updated to ${status.toUpperCase()}`);
-            } else {
-                notify(`DTR Status set to ${status.toUpperCase()}`);
-            }
-
-            // Agad na i-update ang local state sa UI para maging REJECTED at magpakita ang remarks!
-            setLogs(prevLogs => prevLogs.map(l => {
+            // Instant UI update
+            setLogs(prev => prev.map(l => {
                 if (idOf(l) === logId) {
                     return {
                         ...l,
@@ -252,12 +213,19 @@ export default function SupervisorDashboard({ supervisorName: supProp, onLogout 
 
             setRejectLogTarget(null);
             setRejectionReason('');
-            fetchAllLogs();
+
+            const res = await fetch(`${API_BASE_URL}/api/dtr-logs/${logId}/status`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+
+            if (res.ok) {
+                notify(`DTR Status: ${status.toUpperCase()}`);
+                fetchAllLogs();
+            }
         } catch (e) {
-            console.error("Error updating status:", e);
-            notify(`DTR Status set to ${status.toUpperCase()}`);
-            setRejectLogTarget(null);
-            setRejectionReason('');
+            console.error("Update status error:", e);
         }
     };
 
