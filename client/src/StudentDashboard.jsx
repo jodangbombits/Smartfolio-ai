@@ -8,7 +8,7 @@ import {
 const API_BASE_URL = import.meta.env.VITE_API_URL || "http://127.0.0.1:8000";
 const REQUIRED_HOURS = 500;
 
-/* ───────────── helpers ───────────── */
+/* ───────────── Helpers ───────────── */
 const keyOf = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 const getLocalDateString = () => keyOf(new Date());
 const parseLocal = (s) => { const [y, m, d] = String(s).split('-').map(Number); return new Date(y, (m || 1) - 1, d || 1); };
@@ -20,7 +20,6 @@ const idOf = (l) => l.id || l.log_id;
 const hrsOf = (l) => parseFloat(l.rendered_today || l.hoursRendered || 0) || 0;
 const statusOf = (l) => (l.status || 'pending').toLowerCase();
 
-// Safe Extractor para sa Rejection Remarks / Supervisor Reason
 const getRejectionRemark = (log) => {
     if (!log) return '';
     return log.rejection_reason ||
@@ -34,8 +33,7 @@ const getRejectionRemark = (log) => {
 
 const parseDate = (s) => { if (!s) return null; const [y, m, d] = String(s).slice(0, 10).split('-').map(Number); return (y && m && d) ? new Date(y, m - 1, d) : null; };
 const fmtDate = (s) => { const d = s instanceof Date ? s : parseDate(s); return d ? d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '—'; };
-const fullUrl = (u) =>
-    !u ? null : /^https?:\/\//i.test(u) ? u : `${API_BASE_URL}${u.startsWith('/') ? '' : '/'}${u}`;
+const fullUrl = (u) => !u ? null : /^https?:\/\//i.test(u) ? u : `${API_BASE_URL}${u.startsWith('/') ? '' : '/'}${u}`;
 
 const getMoaState = (p, today) => {
     if (!p.moaSigned && !p.moaNumber && !p.moaFileUrl && !p.moaValidUntil) return { label: 'NOT RECORDED', cls: 'muted', note: 'Wala pang MOA na naitala ng Supervisor.' };
@@ -106,7 +104,7 @@ const polishNotes = (raw) => raw.split(/[,\n;]+|\band\b/i).map(s => s.trim()).fi
     return hit ? `${hit[1]} (${cap}).` : `Completed task: ${cap}.`;
 }).map(l => `• ${l}`).join('\n');
 
-/* ───────────── styles ───────────── */
+/* ───────────── Styles ───────────── */
 const CSS = `
 @import url('https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap');
 .sf{--cy:#22d3ee;--vi:#a78bfa;--ok:#34d399;--warn:#facc15;--bad:#f87171;--mut:#64748b;--line:rgba(34,211,238,.3);
@@ -128,9 +126,7 @@ const CSS = `
 .sf-out{margin-top:auto;color:var(--bad);border-color:rgba(248,113,113,.35);background:rgba(248,113,113,.07)}
 .sf-main{margin-left:250px;padding:18px 28px 40px}
 .top{display:flex;justify-content:space-between;align-items:center;gap:12px;font-size:11px;color:#94a3b8;margin-bottom:18px}
-.dot{display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--ok);box-shadow:0 0 8px var(--ok);margin-right:8px;animation:pl 2s infinite}
-@keyframes pl{50%{opacity:.35}}
-@media (prefers-reduced-motion:reduce){.dot{animation:none}}
+.dot{display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--ok);box-shadow:0 0 8px var(--ok);margin-right:8px}
 .pg{display:flex;justify-content:space-between;align-items:flex-end;gap:16px;flex-wrap:wrap;margin-bottom:18px}
 .pg h1{font-size:30px;letter-spacing:.06em;text-transform:uppercase;color:#f8fafc;text-shadow:0 0 18px rgba(34,211,238,.35)}
 .pg p{margin:6px 0 0;font-size:11px;color:var(--mut);letter-spacing:.08em}
@@ -150,7 +146,6 @@ const CSS = `
 .sh svg{color:var(--cy)}
 .btn{display:inline-flex;align-items:center;gap:6px;padding:8px 14px;border-radius:9px;border:1px solid var(--line);background:rgba(34,211,238,.08);color:var(--cy);font-size:11.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;cursor:pointer;text-decoration:none}
 .btn:hover{background:rgba(34,211,238,.18)}
-.btn:disabled{opacity:.4;cursor:not-allowed}
 .btn.solid{background:linear-gradient(90deg,#0891b2,#0e7490);color:#fff;border-color:#22d3ee;box-shadow:0 0 18px rgba(34,211,238,.4)}
 .btn.bad{color:var(--bad);border-color:rgba(248,113,113,.45);background:rgba(239,68,68,.12)}
 .btn.vi{color:var(--vi);border-color:rgba(167,139,250,.5);background:rgba(167,139,250,.1)}
@@ -228,6 +223,7 @@ const NAV = [
     { id: 'ai', label: 'AI Assistant', icon: Bot },
     { id: 'profile', label: 'Profile', icon: User }
 ];
+
 const HEAD = {
     dashboard: ['Student Dashboard', 'DTR COMMUNICATION & LOG PORTAL'],
     logs: ['My DTR Logs', 'LAHAT NG ISINUMITE MONG DTR'],
@@ -237,10 +233,10 @@ const HEAD = {
 };
 
 export default function StudentDashboard({ studentName: studentNameProp = 'Student', studentInfo = null, user = null, onLogout }) {
-    const studentName = studentInfo?.name || studentInfo?.username || studentNameProp;
     const savedUser = JSON.parse(localStorage.getItem('user') || '{}');
     const info = { ...savedUser, ...(user || {}), ...(studentInfo || {}) };
-    const currentUserId = studentInfo?.id ?? user?.id ?? savedUser?.id ?? 5;
+    const currentUserId = studentInfo?.id || user?.id || savedUser?.id || savedUser?.user_id || 2;
+    const studentName = studentInfo?.name || studentInfo?.full_name || savedUser?.full_name || savedUser?.name || studentNameProp;
 
     const [logs, setLogs] = useState([]);
     const [tab, setTab] = useState('dashboard');
@@ -272,7 +268,7 @@ export default function StudentDashboard({ studentName: studentNameProp = 'Stude
 
     const notify = (msg, err = false) => { setToast({ msg, err }); setTimeout(() => setToast(null), 3200); };
 
-    /* ── Realtime DTR Fetching (2s Interval) ── */
+    /* ── Realtime DTR Fetching ── */
     const fetchDTRLogs = useCallback(async () => {
         if (!currentUserId) return;
         try {
@@ -282,29 +278,17 @@ export default function StudentDashboard({ studentName: studentNameProp = 'Stude
             const list = Array.isArray(data) ? data : (data.logs || []);
             setLogs(list);
 
-            // Sync Active Chat Modal Realtime
-            setActiveChatLog(prev => {
-                if (!prev) return null;
-                const updated = list.find(l => idOf(l) === idOf(prev));
-                return updated || prev;
-            });
-
-            // Sync Resubmit Target Modal Realtime so Remarks update instantly
-            setResubmitTargetLog(prev => {
-                if (!prev) return null;
-                const updated = list.find(l => idOf(l) === idOf(prev));
-                return updated || prev;
-            });
+            setActiveChatLog(prev => prev ? (list.find(l => idOf(l) === idOf(prev)) || prev) : null);
+            setResubmitTargetLog(prev => prev ? (list.find(l => idOf(l) === idOf(prev)) || prev) : null);
         } catch (e) { console.error('Error fetching DTR logs:', e); }
     }, [currentUserId]);
 
     const fetchInternProfile = useCallback(async () => {
         try {
-            const res = await fetch(`${API_BASE_URL}/api/interns`);
+            const res = await fetch(`${API_BASE_URL}/api/interns/${currentUserId}/profile`);
             if (res.ok) {
                 const data = await res.json();
-                const found = Array.isArray(data) ? data.find(i => Number(i.id) === Number(currentUserId)) : null;
-                setInternProfile(prev => (JSON.stringify(prev) === JSON.stringify(found || null) ? prev : (found || null)));
+                setInternProfile(data || null);
             }
         } catch (e) { console.error('Error fetching intern profile:', e); }
         finally { setProfileTried(true); }
@@ -327,7 +311,7 @@ export default function StudentDashboard({ studentName: studentNameProp = 'Stude
         return parseFloat((end - start).toFixed(2));
     };
 
-    /* ── derived stats ── */
+    /* ── Derived Stats ── */
     const S = useMemo(() => {
         const approved = logs.filter(l => statusOf(l) === 'approved');
         const rejected = logs.filter(l => statusOf(l) === 'rejected');
@@ -365,18 +349,17 @@ export default function StudentDashboard({ studentName: studentNameProp = 'Stude
         });
     }, [logs, statusFilter, search]);
 
-    /* ── actions ── */
+    /* ── Actions ── */
     const openNew = (prefill = '') => {
         setResubmitTargetLog(null); setLogDate(getLocalDateString()); setTimeIn('08:00'); setTimeOut('18:00');
         setAccomplishment(typeof prefill === 'string' ? prefill : ''); setProofFile(null); setExistingProofUrl(''); setIsSubmitModalOpen(true);
     };
     const openResubmit = (log) => {
         setResubmitTargetLog(log); setLogDate(log.log_date || log.date || getLocalDateString());
-        setTimeIn(log.time_in || log.timeIn || '08:00'); setTimeOut(log.time_out || log.timeOut || '18:00');
+        setTimeIn(log.time_in || '08:00'); setTimeOut(log.time_out || '18:00');
         setAccomplishment(log.accomplishment || log.raw_notes || ''); setExistingProofUrl(log.proof_url || ''); setProofFile(null); setIsSubmitModalOpen(true);
     };
 
-    /* ───── REALTIME SUBMIT & RESUBMIT HANDLER ───── */
     const handleSubmitDTR = async (e) => {
         e.preventDefault();
         const hours = calcHours(timeIn, timeOut);
@@ -404,7 +387,7 @@ export default function StudentDashboard({ studentName: studentNameProp = 'Stude
                 accomplishment: accomplishment,
                 raw_notes: accomplishment,
                 proof_url: proofUrl,
-                status: 'pending' // Reset to pending state on submission/resubmission
+                status: 'pending'
             };
 
             if (resubmitTargetLog) {
@@ -425,18 +408,15 @@ export default function StudentDashboard({ studentName: studentNameProp = 'Stude
                 setProofFile(null);
                 fetchDTRLogs();
             } else {
-                const err = await res.json().catch(() => ({}));
-                notify('Hindi na-submit: ' + (err.detail || 'Subukang muli.'), true);
+                notify('Hindi na-submit. Subukang muli.', true);
             }
         } catch (err) {
-            console.error(err);
-            notify('Hindi maka-connect sa server. Naka-on ba ang backend?', true);
+            notify('Hindi maka-connect sa server.', true);
         } finally {
             setIsSubmitting(false);
         }
     };
 
-    /* ───── REALTIME CHAT SENDER ───── */
     const handleSendReply = async (e) => {
         e.preventDefault();
         if (!replyText.trim() || !activeChatLog || isSendingChat) return;
@@ -445,7 +425,6 @@ export default function StudentDashboard({ studentName: studentNameProp = 'Stude
         setReplyText('');
         const payload = { sender: 'student', message: text, text, timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) };
 
-        // Instant Optimistic State Update for Realtime Chat Display
         setActiveChatLog(prev => prev ? { ...prev, messages: [...(prev.messages || []), payload] } : null);
         setLogs(prevLogs => prevLogs.map(l => idOf(l) === logId ? { ...l, messages: [...(l.messages || []), payload] } : l));
 
@@ -461,7 +440,7 @@ export default function StudentDashboard({ studentName: studentNameProp = 'Stude
     };
 
     const handleLogout = () => { if (onLogout) onLogout(); else { localStorage.clear(); window.location.reload(); } };
-    const copy = async (t, ok = 'Na-copy.') => { try { await navigator.clipboard.writeText(t); notify(ok); } catch { notify('Hindi ma-copy. I-select at kopyahin manually.', true); } };
+    const copy = async (t, ok = 'Na-copy.') => { try { await navigator.clipboard.writeText(t); notify(ok); } catch { notify('Hindi ma-copy.', true); } };
 
     const weeklyReport = useMemo(() => {
         const wk = weekStartKey(getLocalDateString());
@@ -470,19 +449,18 @@ export default function StudentDashboard({ studentName: studentNameProp = 'Stude
         if (!rows.length) return '';
         const total = rows.reduce((s, l) => s + hrsOf(l), 0);
         return [`WEEKLY ACCOMPLISHMENT REPORT`, `Intern: ${studentName}`, `Week of ${shortDate(parseLocal(wk))}`, '',
-            ...rows.map(l => `${l.log_date || l.date} | ${l.time_in || l.timeIn}-${l.time_out || l.timeOut} | ${hrsOf(l)} hrs\n${polishNotes(l.accomplishment || l.raw_notes || '')}`),
+            ...rows.map(l => `${l.log_date || l.date} | ${l.time_in || '08:00'}-${l.time_out || '18:00'} | ${hrsOf(l)} hrs\n${polishNotes(l.accomplishment || l.raw_notes || '')}`),
             '', `Total hours this week: ${total}`, `Total approved hours to date: ${S.hours} / ${requiredHours}`].join('\n');
     }, [logs, studentName, S.hours, requiredHours]);
 
     const exportCSV = () => {
         const esc = v => `"${String(v ?? '').replace(/"/g, '""')}"`;
         const rows = [['Date', 'Time In', 'Time Out', 'Hours', 'Accomplishment', 'Status'],
-        ...logs.map(l => [l.log_date || l.date, l.time_in || l.timeIn, l.time_out || l.timeOut, hrsOf(l), l.accomplishment || l.raw_notes, statusOf(l)])];
+        ...logs.map(l => [l.log_date || l.date, l.time_in || '08:00', l.time_out || '18:00', hrsOf(l), l.accomplishment || l.raw_notes, statusOf(l)])];
         const url = URL.createObjectURL(new Blob([rows.map(r => r.map(esc).join(',')).join('\n')], { type: 'text/csv' }));
         const a = document.createElement('a'); a.href = url; a.download = 'my-dtr-logs.csv'; a.click(); URL.revokeObjectURL(url);
     };
 
-    /* ── reusable pieces ── */
     const chip = (l) => { const s = statusOf(l); return <span className={`chip ${s === 'approved' ? 'ok' : s === 'rejected' ? 'bad' : 'warn'}`}>{s.toUpperCase()}</span>; };
 
     const renderTable = (rows) => (
@@ -497,7 +475,7 @@ export default function StudentDashboard({ studentName: studentNameProp = 'Stude
                         return (
                             <tr key={idOf(l)}>
                                 <td style={{ color: '#22d3ee', whiteSpace: 'nowrap' }}>{l.log_date || l.date}</td>
-                                <td style={{ whiteSpace: 'nowrap' }}>{l.time_in || l.timeIn} - {l.time_out || l.timeOut}</td>
+                                <td style={{ whiteSpace: 'nowrap' }}>{l.time_in || '08:00'} - {l.time_out || '18:00'}</td>
                                 <td style={{ color: '#38bdf8', fontWeight: 700, whiteSpace: 'nowrap' }}>{hrsOf(l)} hrs</td>
                                 <td style={{ color: '#94a3b8', maxWidth: 260 }}>{l.accomplishment || l.raw_notes}</td>
                                 <td>{l.proof_url
@@ -529,7 +507,6 @@ export default function StudentDashboard({ studentName: studentNameProp = 'Stude
 
     const etaText = S.eta ? S.eta.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'Complete';
 
-    /* ───────────── RENDER ───────────── */
     return (
         <div className="sf">
             <style>{CSS}</style>
@@ -645,7 +622,7 @@ export default function StudentDashboard({ studentName: studentNameProp = 'Stude
                         <span className={`chip ${S.needsReply.length ? 'warn' : 'ok'}`}>{S.needsReply.length ? `${S.needsReply.length} NEEDS REPLY` : 'ALL CAUGHT UP'}</span>
                     </div>
                     {logs.filter(l => l.messages?.length).length === 0 ? (
-                        <div className="card empty"><MessageSquare size={30} /><p>Wala ka pang usapan kasama ang Supervisor.</p><p style={{ fontSize: 11 }}>Buksan ang Chat sa kahit anong DTR entry para magsimula.</p>
+                        <div className="card empty"><MessageSquare size={30} /><p>Wala ka pang usapan kasama ang Supervisor.</p>
                             <button className="btn" onClick={() => setTab('logs')}>Pumunta sa My DTR Logs</button></div>
                     ) : (
                         <div className="gt">
@@ -690,37 +667,10 @@ export default function StudentDashboard({ studentName: studentNameProp = 'Stude
                         </div>
                         <div className="card" style={{ '--ac': '#34d399' }}>
                             <div className="sh"><FileText size={16} /> Weekly report</div>
-                            <p style={{ color: '#64748b', margin: '0 0 10px' }}>Awtomatikong ginagawa mula sa mga DTR mo ngayong linggo (hindi kasama ang rejected).</p>
-                            <div className="out" style={{ maxHeight: 250, overflow: 'auto', fontSize: 11.5 }}>{weeklyReport || 'Wala pang DTR ngayong linggo. Mag-submit muna ng entry.'}</div>
+                            <p style={{ color: '#64748b', margin: '0 0 10px' }}>Awtomatikong ginagawa mula sa mga DTR mo ngayong linggo.</p>
+                            <div className="out" style={{ maxHeight: 250, overflow: 'auto', fontSize: 11.5 }}>{weeklyReport || 'Wala pang DTR ngayong linggo.'}</div>
                             <div className="act" style={{ marginTop: 10 }}>
-                                <button className="btn" disabled={!weeklyReport} onClick={() => copy(weeklyReport, 'Na-copy ang weekly report.')}><Copy size={13} /> Copy</button>
-                                <button className="btn" disabled={!weeklyReport} onClick={() => {
-                                    const url = URL.createObjectURL(new Blob([weeklyReport], { type: 'text/plain' }));
-                                    const a = document.createElement('a'); a.href = url; a.download = 'weekly-report.txt'; a.click(); URL.revokeObjectURL(url);
-                                }}><Download size={13} /> Download .txt</button>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div className="card" style={{ marginBottom: 16 }}>
-                        <div className="sh"><Sparkles size={16} /> AI competency & career evaluation</div>
-                        <p style={{ color: '#64748b', margin: '0 0 14px' }}>Kinukuwenta mula sa {S.approved.length} approved DTR mo. Keyword-based ang analysis; hindi ito external AI model.</p>
-                        <div className="g2" style={{ margin: 0 }}>
-                            <div>
-                                <div className="lbl" style={{ marginBottom: 10 }}>Verified technical capabilities</div>
-                                {S.skills.map(s => (
-                                    <div className="skill" key={s.key}>
-                                        <div className="r"><span>{s.key}</span><span style={{ color: '#64748b' }}>{s.n} entries | {s.pct}%</span></div>
-                                        <div className="bar"><i style={{ width: `${s.pct}%` }} /></div>
-                                    </div>
-                                ))}
-                            </div>
-                            <div>
-                                <div className="lbl" style={{ marginBottom: 10 }}>Future industry role projection</div>
-                                {S.roles.length === 0 && <div className="empty">Kailangan ng approved DTR para makabuo ng projection.</div>}
-                                {S.roles.map(r => (
-                                    <div className="proj" key={r.key}><b>{r.role}</b><span className="tag">{r.pct}% match</span></div>
-                                ))}
+                                <button className="btn" disabled={!weeklyReport} onClick={() => copy(weeklyReport)}><Copy size={13} /> Copy</button>
                             </div>
                         </div>
                     </div>
@@ -732,19 +682,9 @@ export default function StudentDashboard({ studentName: studentNameProp = 'Stude
                     const moa = getMoaState(prof, today);
                     const reqDone = REQS.filter(r => prof[r.key]).length;
                     const reqPct = Math.round((reqDone / REQS.length) * 100);
-                    const end = parseDate(prof.internshipEnd), vu = parseDate(prof.moaValidUntil);
-                    const coverage = end && vu && end > vu;
-                    const rated = Object.values(prof.rating || {}).filter(v => v > 0);
-                    const avg = rated.length ? (rated.reduce((a, b) => a + b, 0) / rated.length).toFixed(1) : null;
                     const F = (k, v) => <div key={k}><div className="lbl">{k}</div><div style={{ marginTop: 4, color: v ? '#e2e8f0' : '#475569' }}>{v || 'Wala pang info'}</div></div>;
                     const moaColor = moa.cls === 'ok' ? '#34d399' : moa.cls === 'bad' ? '#f87171' : moa.cls === 'warn' ? '#facc15' : '#94a3b8';
                     return (<>
-                        {profileTried && !internProfile && (
-                            <div className="card warnbox" style={{ marginBottom: 16, '--ac': '#facc15' }}>
-                                <AlertCircle size={18} /> Hindi makuha ang profile record mo mula sa server. Siguraduhing tumatakbo ang backend at may record ka sa Intern Profile & MOA ng Supervisor.
-                            </div>
-                        )}
-
                         <div className="g3">
                             <div className="card" style={{ '--ac': reqPct === 100 ? '#34d399' : '#facc15', display: 'flex', alignItems: 'center', gap: 16 }}>
                                 <Ring pct={reqPct} size={92} stroke={8} color={reqPct === 100 ? '#34d399' : '#facc15'}><CheckCircle2 size={26} color={reqPct === 100 ? '#34d399' : '#facc15'} /></Ring>
@@ -763,106 +703,27 @@ export default function StudentDashboard({ studentName: studentNameProp = 'Stude
                                 <div className="lbl">[ Internship progress ]</div>
                                 <div className="big" style={{ fontSize: 28 }}>{S.hours}<span style={{ fontSize: 14, color: '#64748b' }}> / {requiredHours} hrs</span></div>
                                 <div className="bar"><i style={{ width: `${S.pct}%` }} /></div>
-                                <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 8 }}>{S.remaining > 0 ? `Natitira: ${S.remaining} hrs | Est. tapos: ${etaText}` : 'Kumpleto na ang required hours!'}</div>
                             </div>
                         </div>
-
-                        {coverage && (
-                            <div className="card warnbox" style={{ marginBottom: 16, '--ac': '#facc15' }}>
-                                <AlertCircle size={18} /> Mas matagal ang internship end date ({fmtDate(prof.internshipEnd)}) kaysa sa validity ng MOA ({fmtDate(prof.moaValidUntil)}). Makipag-ugnayan sa school coordinator para i-renew.
-                            </div>
-                        )}
 
                         <div className="g2" style={{ alignItems: 'start' }}>
-                            <div className="col">
-                                <div className="card">
-                                    <div style={{ display: 'flex', gap: 16, alignItems: 'center', marginBottom: 18 }}>
-                                        <div className="av cy" style={{ width: 60, height: 60, fontSize: 24 }}>{studentName.charAt(0).toUpperCase()}</div>
-                                        <div><div className="hd" style={{ fontSize: 22, fontWeight: 700 }}>{studentName}</div><div style={{ color: '#22d3ee' }}>Student Intern</div></div>
-                                    </div>
-                                    <div className="sh"><User size={16} /> School / intern information</div>
-                                    <div className="kv">
-                                        {F('Email ng account', info.email || prof.email)}
-                                        {F('Paaralan / University', prof.school)}
-                                        {F('Course / Degree', prof.course)}
-                                        {F('Year level', prof.yearLevel)}
-                                        {F('School coordinator / adviser', prof.coordinatorName)}
-                                        {F('Contact (email / phone)', prof.coordinatorContact)}
-                                    </div>
-                                </div>
-                                <div className="card">
-                                    <div className="sh"><LayoutDashboard size={16} /> Internship details</div>
-                                    <div className="kv">
-                                        {F('Host company', prof.hostCompany)}
-                                        {F('Department / assignment', prof.department)}
-                                        {F('Start date', prof.internshipStart ? fmtDate(prof.internshipStart) : '')}
-                                        {F('End date', prof.internshipEnd ? fmtDate(prof.internshipEnd) : '')}
-                                        {F('Required hours', `${requiredHours} hrs`)}
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div className="col">
-                                <div className="card" style={{ '--ac': '#a78bfa' }}>
-                                    <div className="sh"><FileText size={16} /> Memorandum of Agreement (MOA)</div>
-                                    <div className="kv">
-                                        {F('MOA reference no.', prof.moaNumber)}
-                                        {F('Date signed', prof.moaDateSigned ? fmtDate(prof.moaDateSigned) : '')}
-                                        {F('Valid until', prof.moaValidUntil ? fmtDate(prof.moaValidUntil) : '')}
-                                        <div><div className="lbl">Signed (parehong partido)</div><div style={{ marginTop: 4 }}><span className={`chip ${prof.moaSigned ? 'ok' : 'muted'}`}>{prof.moaSigned ? 'SIGNED' : 'NOT YET'}</span></div></div>
-                                    </div>
-                                    <div style={{ marginTop: 14 }}>
-                                        {prof.moaFileUrl
-                                            ? <a className="btn sm" href={fullUrl(prof.moaFileUrl)} target="_blank" rel="noreferrer"><Paperclip size={12} /> View MOA <Eye size={12} /></a>
-                                            : <span style={{ color: '#475569', fontStyle: 'italic' }}>Wala pang na-upload na MOA document</span>}
-                                    </div>
-                                </div>
-                                <div className="card">
-                                    <div className="sh"><CheckCircle2 size={16} /> Internship requirements checklist</div>
-                                    {REQS.map(r => (
-                                        <div key={r.key} className={`ms ${prof[r.key] ? 'done' : ''}`}>
-                                            <div className="ic">{prof[r.key] ? <CheckCircle2 size={16} /> : <AlertCircle size={16} />}</div>
-                                            <span style={{ flex: 1 }}>{r.label}</span>
-                                            <span className={`chip ${prof[r.key] ? 'ok' : 'warn'}`}>{prof[r.key] ? 'DONE' : 'MISSING'}</span>
-                                        </div>
-                                    ))}
-                                </div>
-                                <div className="card" style={{ '--ac': '#a78bfa' }}>
-                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-                                        <div className="sh" style={{ margin: 0 }}><Sparkles size={16} /> Supervisor rating</div>
-                                        <span style={{ color: '#c4b5fd' }}>{avg ? `Average: ${avg} / 5` : 'Wala pang rating'}</span>
-                                    </div>
-                                    {RATINGS.map(r => {
-                                        const v = prof.rating?.[r.key] || 0;
-                                        return (
-                                            <div className="ms" key={r.key}>
-                                                <span style={{ flex: 1, color: '#cbd5e1' }}>{r.label}</span>
-                                                <div className="dots">{[1, 2, 3, 4, 5].map(n => <i key={n} className={v >= n ? 'on' : ''} />)}</div>
-                                            </div>
-                                        );
-                                    })}
-                                </div>
-                            </div>
-                        </div>
-
-                        <div className="g2" style={{ marginTop: 16 }}>
                             <div className="card">
-                                <div className="sh"><Award size={16} /> Hours milestones</div>
-                                {[25, 50, 75, 100].map(p => {
-                                    const target = (requiredHours * p) / 100, done = S.hours >= target;
-                                    return (
-                                        <div key={p} className={`ms ${done ? 'done' : ''}`}>
-                                            <div className="ic">{done ? <CheckCircle2 size={16} /> : <Clock size={16} />}</div>
-                                            <div style={{ flex: 1 }}><b>{p}% - {target} hrs</b><div style={{ color: '#64748b', fontSize: 11 }}>{done ? 'Naabot na' : `${(target - S.hours).toFixed(1)} hrs na lang`}</div></div>
-                                            {done && <span className="chip ok">DONE</span>}
-                                        </div>
-                                    );
-                                })}
+                                <div className="sh"><User size={16} /> Student information</div>
+                                <div className="kv">
+                                    {F('Name', studentName)}
+                                    {F('Email', info.email || prof.email)}
+                                    {F('School', prof.school)}
+                                    {F('Course', prof.course)}
+                                </div>
                             </div>
-                            <div className="card" style={{ '--ac': '#34d399' }}>
-                                <div className="sh"><FileText size={16} /> DTR summary</div>
-                                {[['Total submitted', logs.length, '#22d3ee'], ['Approved', S.approved.length, '#34d399'], ['Pending', S.pending.length, '#facc15'], ['Rejected', S.rejected.length, '#f87171'], ['Messages exchanged', logs.reduce((s, l) => s + (l.messages?.length || 0), 0), '#a78bfa']].map(([k, v, c]) => (
-                                    <div className="ms" key={k}><span style={{ flex: 1, color: '#94a3b8' }}>{k}</span><b className="hd" style={{ fontSize: 18, color: c }}>{v}</b></div>
+                            <div className="card">
+                                <div className="sh"><CheckCircle2 size={16} /> Checklist</div>
+                                {REQS.map(r => (
+                                    <div key={r.key} className={`ms ${prof[r.key] ? 'done' : ''}`}>
+                                        <div className="ic">{prof[r.key] ? <CheckCircle2 size={16} /> : <AlertCircle size={16} />}</div>
+                                        <span style={{ flex: 1 }}>{r.label}</span>
+                                        <span className={`chip ${prof[r.key] ? 'ok' : 'warn'}`}>{prof[r.key] ? 'DONE' : 'MISSING'}</span>
+                                    </div>
                                 ))}
                             </div>
                         </div>
@@ -870,12 +731,12 @@ export default function StudentDashboard({ studentName: studentNameProp = 'Stude
                 })()}
             </main>
 
-            {/* ───── SUBMIT / RESUBMIT MODAL (PROPER REJECTION REMARK DISPLAY) ───── */}
+            {/* ───── SUBMIT / RESUBMIT MODAL ───── */}
             {isSubmitModalOpen && (
                 <div className="ovl">
                     <div className="modal">
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-                            <h3 style={{ fontSize: 17, letterSpacing: '.08em', textTransform: 'uppercase', display: 'flex', gap: 8, alignItems: 'center' }}>
+                            <h3 style={{ fontSize: 17, textTransform: 'uppercase', display: 'flex', gap: 8, alignItems: 'center' }}>
                                 {resubmitTargetLog ? <RotateCcw size={18} color="#f87171" /> : <Clock size={18} color="#22d3ee" />}
                                 {resubmitTargetLog ? 'Resubmit DTR entry' : 'Submit daily time record'}
                             </h3>
@@ -900,7 +761,6 @@ export default function StudentDashboard({ studentName: studentNameProp = 'Stude
                             <div style={{ color: '#22d3ee' }}>Rendered hours: <b>{calcHours(timeIn, timeOut)} hrs</b></div>
                             <div><label className="fl">Accomplishments / summary</label>
                                 <textarea className="in" rows="4" placeholder="Ano ang mga natapos mo ngayong araw?" value={accomplishment} onChange={e => setAccomplishment(e.target.value)} style={{ resize: 'none' }} required />
-                                <button type="button" className="btn vi sm" style={{ marginTop: 6 }} disabled={!accomplishment.trim()} onClick={() => setAccomplishment(polishNotes(accomplishment))}><Wand2 size={12} /> Polish notes</button>
                             </div>
                             <div>
                                 <label className="fl">Proof / document</label>
@@ -926,14 +786,14 @@ export default function StudentDashboard({ studentName: studentNameProp = 'Stude
                     <div className="modal" style={{ width: 'min(520px,100%)', display: 'flex', flexDirection: 'column' }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingBottom: 12, marginBottom: 12, borderBottom: '1px solid rgba(255,255,255,.08)' }}>
                             <div>
-                                <h3 style={{ fontSize: 16, letterSpacing: '.08em', textTransform: 'uppercase', display: 'flex', gap: 8, alignItems: 'center' }}><MessageSquare size={18} color="#22d3ee" /> Supervisor thread</h3>
+                                <h3 style={{ fontSize: 16, textTransform: 'uppercase', display: 'flex', gap: 8, alignItems: 'center' }}><MessageSquare size={18} color="#22d3ee" /> Supervisor thread</h3>
                                 <div style={{ fontSize: 11, color: '#64748b', marginTop: 4 }}>DTR record: <b style={{ color: '#38bdf8' }}>{activeChatLog.log_date || activeChatLog.date}</b></div>
                             </div>
                             <button className="btn sm" onClick={() => setActiveChatLog(null)} aria-label="Close"><X size={14} /></button>
                         </div>
                         <div style={{ minHeight: 250, maxHeight: 360, overflowY: 'auto', background: 'rgba(5,8,22,.8)', border: '1px solid rgba(255,255,255,.06)', borderRadius: 12, padding: 14, marginBottom: 12, display: 'flex', flexDirection: 'column', gap: 12 }}>
                             {!activeChatLog.messages?.length ? (
-                                <div className="empty" style={{ margin: 'auto' }}><b style={{ color: '#94a3b8' }}>Wala pang usapan dito.</b><p style={{ fontSize: 11 }}>Mag-message sa baba kung may tanong ka sa Supervisor.</p></div>
+                                <div className="empty" style={{ margin: 'auto' }}><b style={{ color: '#94a3b8' }}>Wala pang usapan dito.</b></div>
                             ) : activeChatLog.messages.map((m, i) => {
                                 const me = m.sender === 'student';
                                 return (
