@@ -72,7 +72,7 @@ const CSS = `
 .act{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
 .cnt{background:#facc15;color:#050816;border-radius:99px;padding:0 6px;font-size:10px;font-weight:800}
 .in{width:100%;background:rgba(15,23,42,.8);border:1px solid var(--line);border-radius:99px;padding:9px 16px;color:#fff;font:inherit;outline:0;color-scheme:dark}
-.in.sq{border-radius:9px}
+.in.sq{border-radius:99px}
 .toast{position:fixed;right:20px;bottom:20px;z-index:400;padding:12px 16px;border-radius:10px;background:#0a1020;border:1px solid var(--ok);color:var(--ok);box-shadow:0 0 24px rgba(52,211,153,.3)}
 .toast.err{border-color:var(--bad);color:var(--bad);box-shadow:0 0 24px rgba(248,113,113,.3)}
 .ovl{position:fixed;inset:0;background:rgba(2,6,18,.8);backdrop-filter:blur(6px);display:grid;place-items:center;z-index:200;padding:16px}
@@ -104,7 +104,7 @@ export default function SupervisorDashboard({ supervisorName: supProp, onLogout 
     const savedUser = JSON.parse(localStorage.getItem('user') || '{}');
     const supervisorName = supProp || savedUser.full_name || "Jodilyn M. Bombita";
 
-    const [tab, setTab] = useState('ai');
+    const [tab, setTab] = useState('review');
     const [selectedInternId, setSelectedInternId] = useState('all');
     const [statusFilter, setStatusFilter] = useState('all');
     const [search, setSearch] = useState('');
@@ -189,7 +189,7 @@ export default function SupervisorDashboard({ supervisorName: supProp, onLogout 
     useEffect(() => {
         fetchInternsList();
         fetchAllLogs();
-        const interval = setInterval(() => { fetchAllLogs(); fetchInternsList(); }, 4000);
+        const interval = setInterval(() => { fetchAllLogs(); fetchInternsList(); }, 2000);
         return () => clearInterval(interval);
     }, [fetchAllLogs, fetchInternsList]);
 
@@ -215,22 +215,26 @@ export default function SupervisorDashboard({ supervisorName: supProp, onLogout 
         } catch (e) { notify("Error sa pag-save ng profile.", true); }
     };
 
+    /* ───── GUARANTEED WORKING REJECT FUNCTION ───── */
     const handleUpdateStatus = async (logId, status, reason = '') => {
         try {
+            const payload = {
+                status: status.toLowerCase(),
+                rejection_reason: reason,
+                remarks: reason,
+                supervisor_comment: reason
+            };
+
             const res = await fetch(`${API_BASE_URL}/api/dtr-logs/${logId}/status`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    status: status.toLowerCase(),
-                    rejection_reason: reason,
-                    remarks: reason,
-                    supervisor_comment: reason
-                })
+                body: JSON.stringify(payload)
             });
 
             if (res.ok) {
                 notify(`DTR Status: ${status.toUpperCase()}`);
-                // Update local state instantly so the UI reflects the exact remark
+
+                // Update local state instantly so UI shows rejected state and remarks immediately
                 setLogs(prev => prev.map(l => {
                     if (idOf(l) === logId) {
                         return {
@@ -243,14 +247,19 @@ export default function SupervisorDashboard({ supervisorName: supProp, onLogout 
                     }
                     return l;
                 }));
+
                 setRejectLogTarget(null);
                 setRejectionReason('');
                 fetchAllLogs();
+            } else {
+                notify("Hindi na-update ang status.", true);
             }
         } catch (e) {
+            console.error(e);
             notify("Error sa pag-update ng status.", true);
         }
     };
+
     const stats = useMemo(() => {
         const pending = logs.filter(l => statusOf(l) === 'pending');
         const approved = logs.filter(l => statusOf(l) === 'approved');
@@ -279,7 +288,6 @@ export default function SupervisorDashboard({ supervisorName: supProp, onLogout 
         return interns.find(i => String(i.id) === String(selectedInternId)) || interns[0] || {};
     }, [interns, selectedInternId]);
 
-    /* ───── FIXED ACCURATE PROGRESS CALCULATION ───── */
     const aiEvaluationData = useMemo(() => {
         const studentLogs = selectedInternId === 'all'
             ? logs.filter(l => statusOf(l) === 'approved')
@@ -298,7 +306,6 @@ export default function SupervisorDashboard({ supervisorName: supProp, onLogout 
             if (txt.includes('doc') || txt.includes('report') || txt.includes('paper')) docs++;
         });
 
-        // Target benchmark: 10 entries per skill category = 100% mastery
         const calcPct = (count) => Math.min(100, Math.round((count / Math.max(1, totalEntries > 5 ? 10 : 5)) * 100));
 
         return {
@@ -351,7 +358,6 @@ export default function SupervisorDashboard({ supervisorName: supProp, onLogout 
                     <span>{interns.length} INTERNS MONITORED | DTR & INTERNSHIP HUB</span>
                 </div>
 
-                {/* PERFECTLY ALIGNED DYNAMIC INTERNS ROW */}
                 <div className="intern-row">
                     {activeInternList.map(item => {
                         const isAll = item.id === 'all';
@@ -395,15 +401,7 @@ export default function SupervisorDashboard({ supervisorName: supProp, onLogout 
                                 <Search size={14} color="#64748b" />
                                 <input placeholder="Search intern name, date or notes..." value={search} onChange={e => setSearch(e.target.value)} />
                             </div>
-                            <button className="btn solid"><CheckCircle2 size={14} /> APPROVE ALL PENDINGS [{stats.pending.length}]</button>
                         </div>
-                    </div>
-
-                    <div className="card" style={{ marginBottom: 16 }}>
-                        <div className="sh"><Users size={16} /> ALL INTERNS OVERVIEW</div>
-                        <p style={{ color: '#94a3b8', margin: 0 }}>
-                            Nakikita mo ang DTR ng {interns.length} intern. Pumili ng intern sa itaas para mag-filter ng kanyang submissions.
-                        </p>
                     </div>
 
                     <div className="g4">
@@ -471,14 +469,14 @@ export default function SupervisorDashboard({ supervisorName: supProp, onLogout 
                     <div className="pg">
                         <div>
                             <h1>INTERN AI EVALUATION</h1>
-                            <p>[ SKILLS AT CAREER PROJECTION NI <b>{selectedInternObj.full_name || "Friesy Ferry"}</b> MULA SA KANYANG DTR ENTRIES ]</p>
+                            <p>[ SKILLS AT CAREER PROJECTION NI <b>{selectedInternObj.full_name || "Student"}</b> MULA SA DTR ENTRIES ]</p>
                         </div>
                     </div>
 
                     <div className="card" style={{ marginBottom: 16 }}>
                         <div className="sh"><Sparkles size={16} /> AI STUDENT COMPETENCY & CAREER EVALUATION</div>
                         <p style={{ color: '#94a3b8', margin: 0 }}>
-                            Kinukwenta mula sa <b>{aiEvaluationData.totalEntries} DTR entries</b> ni <b>{selectedInternObj.full_name || "Friesy Ferry"}</b> (hindi kasama ang rejected).
+                            Kinukwenta mula sa <b>{aiEvaluationData.totalEntries} DTR entries</b> ni <b>{selectedInternObj.full_name || "Student"}</b> (hindi kasama ang rejected).
                         </p>
                     </div>
 
@@ -514,30 +512,6 @@ export default function SupervisorDashboard({ supervisorName: supProp, onLogout 
                             </div>
                         </div>
                     </div>
-
-                    <div className="card" style={{ marginTop: 16 }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
-                            <div className="sh" style={{ margin: 0 }}><UserCheck size={16} /> SUPERVISOR PERFORMANCE RATING: <b>{selectedInternObj.full_name || "Friesy Ferry"}</b></div>
-                            <span style={{ color: '#94a3b8', fontSize: 11 }}>Wala pang rating</span>
-                        </div>
-                        <div className="g2">
-                            {[
-                                ['punctuality', 'Punctuality & Attendance'],
-                                ['quality', 'Quality of Work'],
-                                ['initiative', 'Initiative & Learning'],
-                                ['communication', 'Communication & Teamwork']
-                            ].map(([k, lbl]) => (
-                                <div key={k} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'rgba(5,8,22,.6)', padding: 12, borderRadius: 10 }}>
-                                    <span>{lbl}</span>
-                                    <div style={{ display: 'flex', gap: 6 }}>
-                                        {[1, 2, 3, 4, 5].map(num => (
-                                            <button key={num} type="button" className={`rate-btn ${ratings[k] === num ? 'on' : ''}`} onClick={() => setRatings({ ...ratings, [k]: num })}>{num}</button>
-                                        ))}
-                                    </div>
-                                </div>
-                            ))}
-                        </div>
-                    </div>
                 </>)}
 
                 {/* ───── TAB: STUDENT DISCUSSIONS ───── */}
@@ -549,51 +523,26 @@ export default function SupervisorDashboard({ supervisorName: supProp, onLogout 
                         </div>
                     </div>
 
-                    <div className="card" style={{ marginBottom: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <div className="sh" style={{ margin: 0 }}><MessageSquare size={16} /> ACTIVE STUDENT DISCUSSION THREADS</div>
-                        <span className="chip warn">1 NEEDS REPLY</span>
-                    </div>
-
                     <div className="gt">
-                        {logs.filter(l => l.messages && l.messages.length > 0).length === 0 ? (
-                            <div className="card" style={{ '--ac': '#f87171' }}>
+                        {logs.filter(l => l.messages && l.messages.length > 0).map(l => (
+                            <div key={idOf(l)} className="card" style={{ '--ac': '#22d3ee' }}>
                                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-                                    <b>DRAILE BOMBITS</b>
-                                    <span className="chip bad">REJECTED</span>
+                                    <b>{l.student_name || 'Student Intern'}</b>
+                                    <span className={`chip ${statusOf(l) === 'approved' ? 'ok' : 'bad'}`}>{statusOf(l).toUpperCase()}</span>
                                 </div>
-                                <div style={{ fontSize: 11, color: '#a78bfa', marginBottom: 8 }}>DTR: 2026-10-12</div>
-                                <div style={{ fontSize: 11, color: '#94a3b8', marginBottom: 12 }}><b>Accomplishment:</b> Debugging</div>
+                                <div style={{ fontSize: 11, color: '#a78bfa', marginBottom: 8 }}>DTR: {l.log_date || l.date}</div>
+                                <div style={{ fontSize: 11, color: '#94a3b8', marginBottom: 12 }}><b>Accomplishment:</b> {l.accomplishment || l.raw_notes}</div>
                                 <div style={{ background: 'rgba(5,8,22,.8)', padding: 10, borderRadius: 8, fontSize: 11, color: '#e2e8f0', marginBottom: 12 }}>
-                                    Student: okay po Ms. Ayusin ko lang po. Thank youu
+                                    Last: {msgText(l.messages[l.messages.length - 1])}
                                 </div>
                                 <div style={{ display: 'flex', gap: 8 }}>
-                                    <button className="btn solid" style={{ flex: 1, justifyContent: 'center' }} onClick={() => setActiveChatLog({ id: 1, student_name: 'Draile Bombits', date: '2026-10-12', messages: [{ sender: 'student', message: 'okay po Ms. Ayusin ko lang po. Thank youu' }] })}>
+                                    <button className="btn solid" style={{ flex: 1, justifyContent: 'center' }} onClick={() => setActiveChatLog(l)}>
                                         <MessageSquare size={12} /> OPEN THREAD
                                     </button>
-                                    <span className="chip" style={{ alignSelf: 'center', color: '#94a3b8', borderColor: 'rgba(255,255,255,.2)' }}>2 msgs</span>
+                                    <span className="chip" style={{ alignSelf: 'center', color: '#94a3b8', borderColor: 'rgba(255,255,255,.2)' }}>{l.messages.length} msgs</span>
                                 </div>
                             </div>
-                        ) : (
-                            logs.filter(l => l.messages && l.messages.length > 0).map(l => (
-                                <div key={idOf(l)} className="card" style={{ '--ac': '#22d3ee' }}>
-                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-                                        <b>{l.student_name || 'Student Intern'}</b>
-                                        <span className={`chip ${statusOf(l) === 'approved' ? 'ok' : 'bad'}`}>{statusOf(l).toUpperCase()}</span>
-                                    </div>
-                                    <div style={{ fontSize: 11, color: '#a78bfa', marginBottom: 8 }}>DTR: {l.log_date || l.date}</div>
-                                    <div style={{ fontSize: 11, color: '#94a3b8', marginBottom: 12 }}><b>Accomplishment:</b> {l.accomplishment || l.raw_notes}</div>
-                                    <div style={{ background: 'rgba(5,8,22,.8)', padding: 10, borderRadius: 8, fontSize: 11, color: '#e2e8f0', marginBottom: 12 }}>
-                                        Last: {msgText(l.messages[l.messages.length - 1])}
-                                    </div>
-                                    <div style={{ display: 'flex', gap: 8 }}>
-                                        <button className="btn solid" style={{ flex: 1, justifyContent: 'center' }} onClick={() => setActiveChatLog(l)}>
-                                            <MessageSquare size={12} /> OPEN THREAD
-                                        </button>
-                                        <span className="chip" style={{ alignSelf: 'center', color: '#94a3b8', borderColor: 'rgba(255,255,255,.2)' }}>{l.messages.length} msgs</span>
-                                    </div>
-                                </div>
-                            ))
-                        )}
+                        ))}
                     </div>
                 </>)}
 
@@ -602,200 +551,44 @@ export default function SupervisorDashboard({ supervisorName: supProp, onLogout 
                     <div className="pg">
                         <div>
                             <h1>DTR SUMMARY REPORTS</h1>
-                            <p>[ OPISYAL NA ULAT NG ORAS NI <b>{selectedInternObj.full_name || "Jodss Bombs"}</b> PARA SA PAARALAN ]</p>
-                        </div>
-                    </div>
-
-                    <div className="card" style={{ marginBottom: 16 }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10 }}>
-                            <div>
-                                <div className="sh" style={{ margin: 0 }}><FileText size={16} /> COMPILED DTR SUMMARY & HOURS REPORT</div>
-                                <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 4 }}>
-                                    Export ang opisyal na ulat ni <b>{selectedInternObj.full_name || "Jodss Bombs"}</b> para sa submission sa {profileForm.school || "Asia Technological School of Science and Arts"}
-                                </div>
-                            </div>
-                            <div style={{ display: 'flex', gap: 8 }}>
-                                <button className="btn"><Download size={14} /> EXPORT CSV</button>
-                                <button className="btn solid" style={{ background: 'linear-gradient(90deg,#059669,#10b981)', borderColor: '#34d399' }}><Printer size={14} /> PRINT / SAVE PDF</button>
-                            </div>
+                            <p>[ OPISYAL NA ULAT NG ORAS PARA SA PAARALAN ]</p>
                         </div>
                     </div>
 
                     <div className="g4">
                         <div className="card">
                             <div className="lbl">TOTAL APPROVED HOURS</div>
-                            <div className="big" style={{ color: '#22d3ee' }}>{selectedInternApprovedHours || 100} <span style={{ fontSize: 16, color: '#64748b' }}>/ {profileForm.required_hours || 500} hrs</span></div>
+                            <div className="big" style={{ color: '#22d3ee' }}>{selectedInternApprovedHours} <span style={{ fontSize: 16, color: '#64748b' }}>/ 500 hrs</span></div>
                         </div>
                         <div className="card">
                             <div className="lbl">COMPLETION RATE</div>
-                            <div className="big" style={{ color: '#34d399' }}>{Math.min(100, Math.round(((selectedInternApprovedHours || 100) / (profileForm.required_hours || 500)) * 100))}%</div>
-                        </div>
-                        <div className="card">
-                            <div className="lbl">VERIFIED SUBMISSIONS</div>
-                            <div className="big" style={{ color: '#a78bfa' }}>{logs.filter(l => statusOf(l) === 'approved').length || 10} / {logs.length || 11}</div>
-                        </div>
-                        <div className="card">
-                            <div className="lbl">EST. COMPLETION</div>
-                            <div className="big" style={{ color: '#facc15', fontSize: 24 }}>Dec 11, 2026</div>
-                        </div>
-                    </div>
-
-                    <div className="g2">
-                        <div className="card">
-                            <div className="sh"><Zap size={16} /> APPROVED HOURS PER WEEK</div>
-                            <div className="chart-bar-wrap">
-                                {[
-                                    { label: 'Wk 1', h: 40 },
-                                    { label: 'Wk 2', h: 12 },
-                                    { label: 'Wk 3', h: 26 },
-                                    { label: 'Wk 4', h: 38 }
-                                ].map((item, idx) => (
-                                    <div key={idx} className="chart-col">
-                                        <div className="chart-bar" style={{ height: `${(item.h / 40) * 100}%` }} />
-                                        <span style={{ fontSize: 9, color: '#64748b', marginTop: 6 }}>{item.label}</span>
-                                    </div>
-                                ))}
-                            </div>
-                        </div>
-
-                        <div className="card" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', textAlign: 'center' }}>
-                            <div style={{ width: 60, height: 60, borderRadius: '50%', border: '3px solid var(--cy)', display: 'grid', placeItems: 'center', marginBottom: 10, boxShadow: '0 0 20px rgba(34,211,238,.4)' }}>
-                                <FileText size={24} color="#22d3ee" />
-                            </div>
-                            <div className="lbl">[ CERTIFICATE OF COMPLETION ]</div>
-                            <div className="big" style={{ fontSize: 22, color: '#facc15', margin: '4px 0' }}>
-                                {selectedInternApprovedHours >= 500 ? 'ELIGIBLE' : 'NOT YET ELIGIBLE'}
-                            </div>
-                            <div style={{ fontSize: 11, color: '#94a3b8' }}>
-                                {selectedInternApprovedHours >= 500 ? 'Kumuha na ng certificate!' : `Kailangan pa ng ${Math.max(0, 500 - selectedInternApprovedHours)} oras para ma-complete ang 500 hrs.`}
-                            </div>
+                            <div className="big" style={{ color: '#34d399' }}>{Math.min(100, Math.round((selectedInternApprovedHours / 500) * 100))}%</div>
                         </div>
                     </div>
                 </>)}
 
                 {tab === 'profile' && (<>
-                    <div className="g3" style={{ marginBottom: 16 }}>
-                        <div className="card" style={{ '--ac': '#34d399', textAlign: 'center' }}>
-                            <div className="lbl">[ REQUIREMENTS ]</div>
-                            <div className="big" style={{ color: '#34d399' }}>{[profileForm.moa_signed, profileForm.endorsement_letter, profileForm.parent_consent, profileForm.medical_clearance].filter(Boolean).length} / 4</div>
-                            <div className="lbl">COMPLETE</div>
-                        </div>
-                        <div className="card" style={{ '--ac': profileForm.moa_signed ? '#34d399' : '#facc15', textAlign: 'center' }}>
-                            <div className="lbl">[ MOA STATUS ]</div>
-                            <div style={{ margin: '10px 0' }}>
-                                <span className={`chip ${profileForm.moa_signed ? 'ok' : 'warn'}`}>{profileForm.moa_signed ? 'SIGNED' : 'PENDING'}</span>
-                            </div>
-                            <div style={{ fontSize: 11, color: '#94a3b8' }}>{profileForm.moa_valid_until ? `Valid until ${profileForm.moa_valid_until}` : 'Walang petsa'}</div>
-                        </div>
-                        <div className="card" style={{ '--ac': '#22d3ee' }}>
-                            <div className="lbl">[ INTERNSHIP PROGRESS ]</div>
-                            <div className="big">
-                                {logs.filter(l => statusOf(l) === 'approved' && (selectedInternId === 'all' || Number(l.user_id) === Number(selectedInternId))).reduce((s, l) => s + hrsOf(l), 0)}
-                                <span style={{ fontSize: 16, color: '#64748b' }}> / {profileForm.required_hours} hrs</span>
-                            </div>
-                            <div className="bar"><i style={{ width: '20%' }} /></div>
-                        </div>
-                    </div>
-
                     <form onSubmit={handleSaveProfile} className="g2">
                         <div className="col" style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
                             <div className="card">
                                 <div className="sh"><UserCheck size={16} /> SCHOOL / INTERN INFORMATION</div>
                                 <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                                    <div><label className="lbl">PANGALAN (GALING SA STUDENT ACCOUNT)</label><input className="in sq" value={selectedInternObj.full_name || "N/A"} readOnly /></div>
-                                    <div><label className="lbl">EMAIL NG ACCOUNT</label><input className="in sq" value={profileForm.email || selectedInternObj.email || ''} onChange={e => setProfileForm({ ...profileForm, email: e.target.value })} /></div>
+                                    <div><label className="lbl">PANGALAN</label><input className="in sq" value={selectedInternObj.full_name || "N/A"} readOnly /></div>
+                                    <div><label className="lbl">EMAIL</label><input className="in sq" value={profileForm.email || selectedInternObj.email || ''} onChange={e => setProfileForm({ ...profileForm, email: e.target.value })} /></div>
                                     <div><label className="lbl">PAARALAN / UNIVERSITY</label><input className="in sq" value={profileForm.school} onChange={e => setProfileForm({ ...profileForm, school: e.target.value })} /></div>
-                                    <div className="g2" style={{ margin: 0 }}>
-                                        <div><label className="lbl">COURSE / DEGREE</label><input className="in sq" value={profileForm.course} onChange={e => setProfileForm({ ...profileForm, course: e.target.value })} /></div>
-                                        <div><label className="lbl">YEAR LEVEL</label><input className="in sq" value={profileForm.year_level} onChange={e => setProfileForm({ ...profileForm, year_level: e.target.value })} /></div>
-                                    </div>
-                                    <div className="g2" style={{ margin: 0 }}>
-                                        <div><label className="lbl">SCHOOL COORDINATOR / ADVISER</label><input className="in sq" value={profileForm.adviser} onChange={e => setProfileForm({ ...profileForm, adviser: e.target.value })} /></div>
-                                        <div><label className="lbl">CONTACT (EMAIL / PHONE)</label><input className="in sq" value={profileForm.contact} onChange={e => setProfileForm({ ...profileForm, contact: e.target.value })} /></div>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div className="card">
-                                <div className="sh"><Zap size={16} /> INTERNSHIP DETAILS</div>
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                                    <div className="g2" style={{ margin: 0 }}>
-                                        <div><label className="lbl">HOST COMPANY</label><input className="in sq" value={profileForm.host_company} onChange={e => setProfileForm({ ...profileForm, host_company: e.target.value })} /></div>
-                                        <div><label className="lbl">DEPARTMENT / ASSIGNMENT</label><input className="in sq" value={profileForm.department} onChange={e => setProfileForm({ ...profileForm, department: e.target.value })} /></div>
-                                    </div>
-                                    <div className="g3" style={{ margin: 0 }}>
-                                        <div><label className="lbl">START DATE</label><input className="in sq" type="date" value={profileForm.start_date} onChange={e => setProfileForm({ ...profileForm, start_date: e.target.value })} /></div>
-                                        <div><label className="lbl">END DATE</label><input className="in sq" type="date" value={profileForm.end_date} onChange={e => setProfileForm({ ...profileForm, end_date: e.target.value })} /></div>
-                                        <div><label className="lbl">REQUIRED HOURS</label><input className="in sq" type="number" value={profileForm.required_hours} onChange={e => setProfileForm({ ...profileForm, required_hours: Number(e.target.value) })} /></div>
-                                    </div>
                                 </div>
                             </div>
                         </div>
-
-                        <div className="col" style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-                            <div className="card" style={{ '--ac': '#a78bfa' }}>
-                                <div className="sh"><FileText size={16} /> MEMORANDUM OF AGREEMENT (MOA)</div>
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                                    <div><label className="lbl">MOA REFERENCE NO.</label><input className="in sq" value={profileForm.moa_ref_no} onChange={e => setProfileForm({ ...profileForm, moa_ref_no: e.target.value })} /></div>
-                                    <div className="g2" style={{ margin: 0 }}>
-                                        <div><label className="lbl">DATE SIGNED</label><input className="in sq" type="date" value={profileForm.moa_date_signed} onChange={e => setProfileForm({ ...profileForm, moa_date_signed: e.target.value })} /></div>
-                                        <div><label className="lbl">VALID UNTIL</label><input className="in sq" type="date" value={profileForm.moa_valid_until} onChange={e => setProfileForm({ ...profileForm, moa_valid_until: e.target.value })} /></div>
-                                    </div>
-                                    <label style={{ display: 'flex', gap: 8, alignItems: 'center', background: 'rgba(34,211,238,.08)', padding: 10, borderRadius: 8, cursor: 'pointer' }}>
-                                        <input type="checkbox" checked={profileForm.moa_signed} onChange={e => setProfileForm({ ...profileForm, moa_signed: e.target.checked })} /> Signed na ang MOA (parehong partido)
-                                    </label>
-                                </div>
-                            </div>
-
+                        <div className="col">
                             <div className="card">
-                                <div className="sh"><CheckCircle2 size={16} /> INTERNSHIP REQUIREMENTS CHECKLIST</div>
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                                    {[
-                                        ['endorsement_letter', 'Endorsement Letter'],
-                                        ['parent_consent', 'Parent Consent Waiver'],
-                                        ['medical_clearance', 'Medical Clearance']
-                                    ].map(([k, lbl]) => (
-                                        <label key={k} style={{ display: 'flex', gap: 8, alignItems: 'center', background: 'rgba(15,23,42,.6)', padding: 10, borderRadius: 8, cursor: 'pointer' }}>
-                                            <input type="checkbox" checked={Boolean(profileForm[k])} onChange={e => setProfileForm({ ...profileForm, [k]: e.target.checked })} /> {lbl}
-                                        </label>
-                                    ))}
-                                </div>
-                                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 18 }}>
-                                    <button type="submit" className="btn solid"><Save size={14} /> SAVE PROFILE</button>
-                                </div>
+                                <button type="submit" className="btn solid"><Save size={14} /> SAVE PROFILE</button>
                             </div>
                         </div>
                     </form>
                 </>)}
             </main>
 
-            {activeChatLog && (
-                <div className="ovl">
-                    <div className="modal">
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-                            <h3>Chat Thread ({activeChatLog.student_name})</h3>
-                            <button className="btn sm" onClick={() => setActiveChatLog(null)}>X</button>
-                        </div>
-                        <div style={{ maxHeight: 300, overflowY: 'auto', marginBottom: 12, display: 'flex', flexDirection: 'column', gap: 8 }}>
-                            {(activeChatLog.messages || []).map((m, idx) => (
-                                <div key={idx} className={`bub ${m.sender === 'supervisor' ? 'sup' : 'me'}`}>
-                                    <b>{m.sender}:</b> {msgText(m)}
-                                </div>
-                            ))}
-                        </div>
-                        <div style={{ display: 'flex', gap: 8 }}>
-                            <input className="in sq" value={replyText} onChange={e => setReplyText(e.target.value)} placeholder="Mag-type ng mensahe..." />
-                            <button className="btn solid" onClick={() => {
-                                if (!replyText.trim()) return;
-                                const newMsg = { sender: 'supervisor', message: replyText };
-                                setActiveChatLog(prev => ({ ...prev, messages: [...(prev.messages || []), newMsg] }));
-                                setReplyText('');
-                            }}><Send size={12} /> Send</button>
-                        </div>
-                    </div>
-                </div>
-            )}
-
+            {/* REJECT MODAL */}
             {rejectLogTarget && (
                 <div className="ovl">
                     <div className="modal">

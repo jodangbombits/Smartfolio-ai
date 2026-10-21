@@ -925,7 +925,6 @@ export default function StudentDashboard({ studentName: studentNameProp = 'Stude
                 <div className="ovl" style={{ zIndex: 300 }}>
                     <div className="modal" style={{ width: 'min(520px,100%)', display: 'flex', flexDirection: 'column' }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingBottom: 12, marginBottom: 12, borderBottom: '1px solid rgba(255,255,255,.08)' }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingBottom: 12, marginBottom: 12, borderBottom: '1px solid rgba(255,255,255,.08)' }}>
                             <div>
                                 <h3 style={{ fontSize: 16, letterSpacing: '.08em', textTransform: 'uppercase', display: 'flex', gap: 8, alignItems: 'center' }}><MessageSquare size={18} color="#22d3ee" /> Supervisor thread</h3>
                                 <div style={{ fontSize: 11, color: '#64748b', marginTop: 4 }}>DTR record: <b style={{ color: '#38bdf8' }}>{activeChatLog.log_date || activeChatLog.date}</b></div>
@@ -936,7 +935,7 @@ export default function StudentDashboard({ studentName: studentNameProp = 'Stude
                             {!activeChatLog.messages?.length ? (
                                 <div className="empty" style={{ margin: 'auto' }}><b style={{ color: '#94a3b8' }}>Wala pang usapan dito.</b><p style={{ fontSize: 11 }}>Mag-message sa baba kung may tanong ka sa Supervisor.</p></div>
                             ) : activeChatLog.messages.map((m, i) => {
-                                const me = m.sender === 'student';s
+                                const me = m.sender === 'student';
                                 return (
                                     <div key={m.id || i} style={{ display: 'flex', flexDirection: 'column', alignItems: me ? 'flex-end' : 'flex-start' }}>
                                         <div style={{ display: 'flex', gap: 6, alignItems: 'center', fontSize: 10.5, color: '#64748b', marginBottom: 3 }}>
