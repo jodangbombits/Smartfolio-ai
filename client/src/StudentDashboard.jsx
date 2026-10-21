@@ -14,7 +14,7 @@ const keyOf = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, 
 const getLocalDateString = () => keyOf(new Date());
 const parseLocal = (s) => { const [y, m, d] = String(s || '').slice(0, 10).split('-').map(Number); return (y && m && d) ? new Date(y, m - 1, d) : null; };
 const weekStartKey = (s) => { const d = parseLocal(s) || new Date(); d.setDate(d.getDate() - ((d.getDay() + 6) % 7)); return keyOf(d); };
-const shortDate = (d) => d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+const shortDate = (d) => d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }); 
 const addBusinessDays = (n) => { const d = new Date(); let left = n; while (left > 0) { d.setDate(d.getDate() + 1); if (d.getDay() % 6 !== 0) left--; } return d; };
 const msgText = (m) => typeof m === 'string' ? m : (m.message || m.text || m.remark || m.content || '');
 const idOf = (l) => l.id || l.log_id;
@@ -26,29 +26,27 @@ const sameJson = (prev, next) => JSON.stringify(prev) === JSON.stringify(next) ?
 const safeUser = () => { try { return JSON.parse(localStorage.getItem('user') || '{}') || {}; } catch { return {}; } };
 
 const getRejectionRemark = (log) => {
-    if (!log) return '';
+    if (!log) return 'Pakiayos ang mga detalye o mag-upload ng bagong proof.';
 
-    // 1. Unang icheck ang direct column fields mula sa dtr_logs table
-    if (log.rejection_reason && log.rejection_reason.trim()) return log.rejection_reason;
-    if (log.remarks && typeof log.remarks === 'string' && log.remarks.trim()) return log.remarks;
-    if (log.supervisor_comment && log.supervisor_comment.trim()) return log.supervisor_comment;
+    // 1. Unang icheck ang mismong rejection_reason o remarks column mula sa dtr_logs table
+    if (log.rejection_reason && String(log.rejection_reason).trim()) {
+        return String(log.rejection_reason).replace(/^REJECTED:\s*/i, '').trim();
+    }
+    if (log.remarks && typeof log.remarks === 'string' && String(log.remarks).trim()) {
+        return String(log.remarks).replace(/^REJECTED:\s*/i, '').trim();
+    }
 
-    // 2. Kung wala doon, icheck ang messages o remarks array
+    // 2. Fallback sa huling mensahe ng supervisor mula sa chat thread
     if (Array.isArray(log.messages) && log.messages.length > 0) {
-        const lastSupMsg = [...log.messages].reverse().find(m => m.sender === 'supervisor' || m.sender_role === 'supervisor');
-        if (lastSupMsg && (lastSupMsg.message || lastSupMsg.text)) {
-            return (lastSupMsg.message || lastSupMsg.text).replace(/^REJECTED:\s*/i, '');
+        const lastSupMsg = [...log.messages].reverse().find(m =>
+            (m.sender === 'supervisor' || m.sender_role === 'supervisor') && m.message
+        );
+        if (lastSupMsg && lastSupMsg.message) {
+            return String(lastSupMsg.message).replace(/^REJECTED:\s*/i, '').trim();
         }
     }
 
-    if (Array.isArray(log.remarks) && log.remarks.length > 0) {
-        const lastRemark = log.remarks[log.remarks.length - 1];
-        if (typeof lastRemark === 'string') return lastRemark;
-        if (lastRemark && lastRemark.message) return lastRemark.message.replace(/^REJECTED:\s*/i, '');
-    }
-
-    // 3. Fallback lang kung talagang walang itinype ang supervisor
-    return 'Walang inilagay na tiyak na dahilan ang supervisor.';
+    return 'Pakiayos ang mga detalye o mag-upload ng bagong proof.';
 };
 const fmtDate = (s) => { const d = s instanceof Date ? s : parseLocal(s); return d ? d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '—'; };
 const fullUrl = (u) => !u ? null : /^https?:\/\//i.test(u) ? u : `${API_BASE_URL}${u.startsWith('/') ? '' : '/'}${u}`;
@@ -471,46 +469,46 @@ export default function StudentDashboard({ studentName: studentNameProp = 'Stude
     };
 };
 const handleSendReply = async (e) => {
-    e.preventDefault();
-    if (!replyText.trim() || !activeChatLog || isSendingChat) return;
-    setIsSendingChat(true);
-    const logId = idOf(activeChatLog), text = replyText.trim();
-    setReplyText('');
+        e.preventDefault();
+        if (!replyText.trim() || !activeChatLog || isSendingChat) return;
+        setIsSendingChat(true);
+        const logId = idOf(activeChatLog), text = replyText.trim();
+        setReplyText('');
+        
+        const newMsg = {
+            sender: 'student',
+            message: text,
+            timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+        };
 
-    const newMsg = {
-        sender: 'student',
-        message: text,
-        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+        // Aggressive Optimistic UI — Idagdag agad sa local state para HINDI NA MAWALA!
+        setLogs(prev => prev.map(l => {
+            if (idOf(l) === logId) {
+                const curMsgs = Array.isArray(l.messages) ? l.messages : [];
+                return { ...l, messages: [...curMsgs, newMsg] };
+            }
+            return l;
+        }));
+
+        try {
+            const res = await fetch(`${API_BASE_URL}/api/dtr/${logId}/messages`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ sender: 'student', message: text })
+            });
+
+            if (res.ok) {
+                notify('Naipadala na ang mensahe!');
+                fetchDTRLogs();
+            } else {
+                console.error("Message send server error:", res.status);
+            }
+        } catch (err) {
+            console.error("Chat fetch error:", err);
+        } finally {
+            setIsSendingChat(false);
+        }
     };
-
-    // Aggressive Optimistic UI — Idagdag agad sa local state para HINDI NA MAWALA!
-    setLogs(prev => prev.map(l => {
-        if (idOf(l) === logId) {
-            const curMsgs = Array.isArray(l.messages) ? l.messages : [];
-            return { ...l, messages: [...curMsgs, newMsg] };
-        }
-        return l;
-    }));
-
-    try {
-        const res = await fetch(`${API_BASE_URL}/api/dtr/${logId}/messages`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ sender: 'student', message: text })
-        });
-
-        if (res.ok) {
-            notify('Naipadala na ang mensahe!');
-            fetchDTRLogs();
-        } else {
-            console.error("Message send server error:", res.status);
-        }
-    } catch (err) {
-        console.error("Chat fetch error:", err);
-    } finally {
-        setIsSendingChat(false);
-    }
-};
 
 const handleLogout = () => { if (onLogout) onLogout(); else { localStorage.clear(); window.location.reload(); } };
 const copy = async (t, ok = 'Na-copy.') => { try { await navigator.clipboard.writeText(t); notify(ok); } catch { notify('Hindi ma-copy.', true); } };
