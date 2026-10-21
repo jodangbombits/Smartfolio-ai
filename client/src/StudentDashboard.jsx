@@ -419,12 +419,11 @@ export default function StudentDashboard({ studentName: studentNameProp = 'Stude
                 status: 'pending'
             };
 
-            // Gamitin ang mismong ID ng log para sa update
             if (resubmitTargetLog) {
-                payload.dtr_id = idOf(resubmitTargetLog);
-                payload.id = idOf(resubmitTargetLog);
+                const targetId = Number(resubmitTargetLog.id || resubmitTargetLog.log_id);
+                payload.dtr_id = targetId;
+                payload.id = targetId;
             }
-
             const res = await fetch(`${API_BASE_URL}/api/dtr/submit`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },

@@ -412,51 +412,52 @@ async def upload_proof(file: UploadFile = File(...)):
         raise HTTPException(status_code=500, detail=f"Upload failed: {str(e)}")
 
 
-# =====================================================================
-# DTR ENDPOINTS
-# =====================================================================
 @app.post("/api/dtr/submit")
 async def submit_dtr(request: Request):
-    payload = await request.json()
     if not supabase:
         raise HTTPException(status_code=500, detail="Database client not configured")
 
-    user_id = payload.get("user_id") or payload.get("userId")
-    dtr_id = payload.get("dtr_id") or payload.get("id")
-
-    log_date = str(payload.get("log_date") or payload.get("date") or "")
-    time_in = str(payload.get("time_in") or payload.get("timeIn") or "")
-    time_out = str(payload.get("time_out") or payload.get("timeOut") or "")
-    raw_notes = str(payload.get("accomplishment") or payload.get("raw_notes") or payload.get("notes") or "")
-    proof_url = str(payload.get("proof_url") or payload.get("proofUrl") or "")
-
-    raw_hours = payload.get("rendered_today") or payload.get("renderedHours") or 8.0
     try:
-        rendered_today = float(raw_hours)
-    except (ValueError, TypeError):
-        rendered_today = 8.0
+        payload = await request.json()
+        user_id = payload.get("user_id") or payload.get("userId")
+        dtr_id = payload.get("dtr_id") or payload.get("id")
 
-    new_log = {
-        "user_id": user_id,
-        "log_date": log_date,
-        "time_in": time_in,
-        "time_out": time_out,
-        "rendered_today": rendered_today,
-        "raw_notes": raw_notes,
-        "accomplishment": raw_notes,
-        "proof_url": proof_url,
-        "status": "pending",
-        "rejection_reason": "",
-        "remarks": ""
-    }
+        log_date = str(payload.get("log_date") or payload.get("date") or "")
+        time_in = str(payload.get("time_in") or payload.get("timeIn") or "")
+        time_out = str(payload.get("time_out") or payload.get("timeOut") or "")
+        raw_notes = str(payload.get("accomplishment") or payload.get("raw_notes") or payload.get("notes") or "")
+        proof_url = str(payload.get("proof_url") or payload.get("proofUrl") or "")
 
-    try:
+        raw_hours = payload.get("rendered_today") or payload.get("renderedHours") or 8.0
+        try:
+            rendered_today = float(raw_hours)
+        except (ValueError, TypeError):
+            rendered_today = 8.0
+
+        # Kapag resubmit, pabalikin sa 'pending' at linisin ang rejection fields
+        log_data = {
+            "user_id": user_id,
+            "log_date": log_date,
+            "time_in": time_in,
+            "time_out": time_out,
+            "rendered_today": rendered_today,
+            "raw_notes": raw_notes,
+            "accomplishment": raw_notes,
+            "proof_url": proof_url,
+            "status": "pending",
+            "rejection_reason": ""
+        }
+
         if dtr_id:
-            res = supabase.table("dtr_logs").update(new_log).eq("id", dtr_id).execute()
+            # I-update ang umiiral na DTR row sa Supabase
+            res = supabase.table("dtr_logs").update(log_data).eq("id", int(dtr_id)).execute()
         else:
-            res = supabase.table("dtr_logs").insert(new_log).execute()
-        return {"message": "DTR saved successfully", "data": res.data}
+            # Mag-insert ng bagong DTR row
+            res = supabase.table("dtr_logs").insert(log_data).execute()
+
+        return {"status": "success", "message": "DTR saved successfully", "data": res.data}
     except Exception as e:
+        print("DTR SUBMIT ERROR:", str(e))
         raise HTTPException(status_code=500, detail=str(e))
 
 
