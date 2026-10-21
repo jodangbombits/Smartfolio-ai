@@ -305,7 +305,8 @@ export default function StudentDashboard({ studentName: studentNameProp = 'Stude
     const fetchDTRLogs = useCallback(async () => {
         if (!currentUserId) return;
         try {
-            const res = await fetch(`${API_BASE_URL}/api/dtr/${currentUserId}`);
+            const cleanUserId = String(currentUserId).split(':')[0].replace(/[^0-9]/g, '');
+            const res = await fetch(`${API_BASE_URL}/api/dtr/${cleanUserId}`);
             if (!res.ok) return;
             const data = await res.json();
             const list = Array.isArray(data) ? data : (data.logs || []);
@@ -316,7 +317,8 @@ export default function StudentDashboard({ studentName: studentNameProp = 'Stude
     const fetchInternProfile = useCallback(async () => {
         if (!currentUserId) return;
         try {
-            const res = await fetch(`${API_BASE_URL}/api/interns/${currentUserId}/profile`);
+            const cleanUserId = String(currentUserId).split(':')[0].replace(/[^0-9]/g, '');
+            const res = await fetch(`${API_BASE_URL}/api/interns/${cleanUserId}/profile`);
             if (res.ok) {
                 const data = normProfile(await res.json());
                 setInternProfile(prev => sameJson(prev, data));
@@ -344,7 +346,6 @@ export default function StudentDashboard({ studentName: studentNameProp = 'Stude
         if (end < start) end += 24;
         return parseFloat((end - start).toFixed(2));
     };
-
     /* ── Derived Stats ── */
     const S = useMemo(() => {
         const approved = logs.filter(l => statusOf(l) === 'approved');
