@@ -896,28 +896,37 @@ return (
                 <div className="modal" style={{ width: 'min(520px,100%)', display: 'flex', flexDirection: 'column' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingBottom: 12, marginBottom: 12, borderBottom: '1px solid rgba(255,255,255,.08)' }}>
                         <div>
-                            <h3 style={{ fontSize: 16, textTransform: 'uppercase', display: 'flex', gap: 8, alignItems: 'center' }}><MessageSquare size={18} color="#22d3ee" /> Supervisor thread</h3>
-                            <div style={{ fontSize: 11, color: '#64748b', marginTop: 4 }}>DTR record: <b style={{ color: '#38bdf8' }}>{dateOf(activeChatLog)}</b></div>
+                            <h3 style={{ fontSize: 16, textTransform: 'uppercase', display: 'flex', gap: 8, alignItems: 'center' }}>
+                                <MessageSquare size={18} color="#22d3ee" /> Supervisor thread
+                            </h3>
+                            <div style={{ fontSize: 11, color: '#64748b', marginTop: 4 }}>
+                                DTR record: <b style={{ color: '#38bdf8' }}>{dateOf(activeChatLog)}</b>
+                            </div>
                         </div>
                         <button className="btn sm" onClick={() => setActiveChatId(null)} aria-label="Close"><X size={14} /></button>
                     </div>
+
                     <div style={{ minHeight: 250, maxHeight: 360, overflowY: 'auto', background: 'rgba(5,8,22,.8)', border: '1px solid rgba(255,255,255,.06)', borderRadius: 12, padding: 14, marginBottom: 12, display: 'flex', flexDirection: 'column', gap: 12 }}>
                         {!activeChatLog.messages?.length ? (
                             <div className="empty" style={{ margin: 'auto' }}><b style={{ color: '#94a3b8' }}>Wala pang usapan dito.</b></div>
                         ) : activeChatLog.messages.map((m, i) => {
                             const me = isStudentMsg(m);
+                            // Linisin ang message text para hindi magpakita ang REJECTED: prefix sa chat window
+                            const cleanText = msgText(m).replace(/^REJECTED:\s*/i, '').trim();
+
                             return (
                                 <div key={m.id || i} style={{ display: 'flex', flexDirection: 'column', alignItems: me ? 'flex-end' : 'flex-start' }}>
                                     <div style={{ display: 'flex', gap: 6, alignItems: 'center', fontSize: 10.5, color: '#64748b', marginBottom: 3 }}>
                                         {me ? <><User size={11} color="#38bdf8" /><b style={{ color: '#38bdf8' }}>You</b></> : <><Shield size={11} color="#f87171" /><b style={{ color: '#f87171' }}>Supervisor</b></>}
                                         <span>• {m.timestamp || 'Recently'}</span>
                                     </div>
-                                    <div className={`bub ${me ? 'me' : 'sup'}`}>{msgText(m)}</div>
+                                    <div className={`bub ${me ? 'me' : 'sup'}`}>{cleanText}</div>
                                 </div>
                             );
                         })}
                         <div ref={chatEndRef} />
                     </div>
+
                     <form onSubmit={handleSendReply} style={{ display: 'flex', gap: 8 }}>
                         <input className="in" value={replyText} onChange={e => setReplyText(e.target.value)} placeholder="Mag-type ng mensahe para sa Supervisor..." />
                         <button type="submit" className="btn solid" disabled={isSendingChat || !replyText.trim()}><Send size={14} /> Send</button>

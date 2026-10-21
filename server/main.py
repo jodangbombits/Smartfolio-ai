@@ -492,41 +492,27 @@ async def get_dtr_logs(user_id: int):
     if not supabase:
         raise HTTPException(status_code=500, detail="Database client not configured")
     try:
-        # 1. Kunin ang logs ng student
+        # Kunin ang logs ng student
         res = supabase.table("dtr_logs").select("*").eq("user_id", user_id).order("id", desc=True).execute()
         logs = res.data or []
 
-        # 2. Para sa bawat log, kunin ang lahat ng kaugnay na messages mula sa dtr_remarks table
+        # Kunin lang ang chat messages mula sa dtr_remarks table
         for log in logs:
             log_id = log.get("id")
             if log_id:
                 try:
                     remarks_res = supabase.table("dtr_remarks").select("*").eq("dtr_id", log_id).order("id", asc=True).execute()
-                    remarks_data = remarks_res.data or []
-                    
                     formatted_msgs = []
-                    for r in remarks_data:
-                        raw_msg = r.get("message", "")
-                        clean_msg = raw_msg.replace("REJECTED:", "").strip()
-                        sender_role = (r.get("sender_role") or r.get("sender_name") or "supervisor").lower()
-                        
+                    for r in remarks_res.data or []:
                         formatted_msgs.append({
                             "id": r.get("id"),
-                            "sender": sender_role,
-                            "message": clean_msg,
+                            "sender": (r.get("sender_role") or r.get("sender_name") or "supervisor").lower(),
+                            "message": str(r.get("message", "")).replace("REJECTED:", "").strip(),
                             "timestamp": str(r.get("created_at") or "")[:16].replace("T", " ")
                         })
-                    
                     log["messages"] = formatted_msgs
-
-                    # Kung may pinakabagong remark na pangkalahatan, itabi bilang remarks/rejection_reason
-                    if formatted_msgs:
-                        latest_clean = formatted_msgs[-1]["message"]
-                        log["remarks"] = latest_clean
-                        if not log.get("rejection_reason"):
-                            log["rejection_reason"] = latest_clean
                 except Exception as r_err:
-                    print("Error fetching remarks for log:", log_id, str(r_err))
+                    print("Error fetching chat messages:", str(r_err))
 
         return logs
     except Exception as e:
