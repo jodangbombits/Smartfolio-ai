@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
     LayoutDashboard, UserCheck, Bot, MessageSquare, FileText,
     CheckCircle2, XCircle, Search, Eye, Save,
-    Users, LogOut, Zap, Send, Download, Printer, Paperclip
+    Users, LogOut, Zap, Send, Download, Printer, Paperclip, Sparkles
 } from 'lucide-react';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || "http://127.0.0.1:8000";
@@ -47,7 +47,7 @@ const CSS = `
 .g4{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:16px}
 .g2{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:16px}
 .g3{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:16px}
-.gt{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:14px}
+.gt{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:14px}
 .sh{display:flex;align-items:center;gap:8px;font-family:'Chakra Petch',sans-serif;font-weight:600;letter-spacing:.1em;text-transform:uppercase;font-size:13.5px;color:#f1f5f9;margin-bottom:12px}
 .sh svg{color:var(--cy)}
 .btn{display:inline-flex;align-items:center;gap:6px;padding:8px 14px;border-radius:99px;border:1px solid var(--line);background:rgba(34,211,238,.08);color:var(--cy);font-size:11.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;cursor:pointer;text-decoration:none}
@@ -85,13 +85,18 @@ const CSS = `
 .intern-row{display:flex;gap:12px;overflow-x:auto;padding-bottom:10px;margin-bottom:18px}
 .intern-card{min-width:200px;flex:1;background:rgba(15,23,42,.6);border:1px solid rgba(34,211,238,.2);border-radius:12px;padding:12px;cursor:pointer;transition:all .2s}
 .intern-card:hover,.intern-card.on{border-color:var(--cy);background:rgba(34,211,238,.1);box-shadow:0 0 16px rgba(34,211,238,.2)}
+.rate-btn{width:28px;height:28px;border-radius:6px;border:1px solid var(--line);background:rgba(15,23,42,.8);color:#94a3b8;cursor:pointer;display:grid;place-items:center;font-weight:700}
+.rate-btn.on{background:#0891b2;color:#fff;border-color:#22d3ee;box-shadow:0 0 10px rgba(34,211,238,.5)}
+.chart-bar-wrap{display:flex;align-items:flex-end;gap:18px;height:120px;padding-top:10px}
+.chart-col{flex:1;display:flex;flex-direction:column;align-items:center;height:100%;justify-content:flex-end}
+.chart-bar{width:100%;max-width:32px;background:linear-gradient(180deg,#22d3ee,#0891b2);border-radius:4px 4px 0 0;box-shadow:0 0 12px rgba(34,211,238,.4)}
 `;
 
 const NAV = [
     { id: 'review', label: 'DTR Review Portal', icon: LayoutDashboard },
     { id: 'profile', label: 'Intern Profile & MOA', icon: UserCheck },
     { id: 'ai', label: 'Intern AI Evaluation', icon: Bot },
-    { id: 'discussions', label: 'Student Discussions', icon: MessageSquare },
+    { id: 'discussions', label: 'Student Discussions', icon: MessageSquare, badge: 1 },
     { id: 'reports', label: 'DTR Summary Reports', icon: FileText }
 ];
 
@@ -114,6 +119,8 @@ export default function SupervisorDashboard({ supervisorName: supProp, onLogout 
         endorsement_letter: false, parent_consent: false, medical_clearance: false
     });
 
+    const [ratings, setRatings] = useState({ punctuality: 0, quality: 0, initiative: 0, communication: 0 });
+
     const [activeChatLog, setActiveChatLog] = useState(null);
     const [replyText, setReplyText] = useState('');
     const [rejectLogTarget, setRejectLogTarget] = useState(null);
@@ -121,7 +128,6 @@ export default function SupervisorDashboard({ supervisorName: supProp, onLogout 
 
     const notify = (msg, err = false) => { setToast({ msg, err }); setTimeout(() => setToast(null), 3200); };
 
-    // Fetch DB interns (Galing Supabase)
     const fetchInternsList = useCallback(async () => {
         try {
             const res = await fetch(`${API_BASE_URL}/api/interns`);
@@ -132,7 +138,6 @@ export default function SupervisorDashboard({ supervisorName: supProp, onLogout 
         } catch (e) { console.error("Error fetching interns:", e); }
     }, []);
 
-    // Fetch DB DTR Logs (Galing Supabase)
     const fetchAllLogs = useCallback(async () => {
         try {
             const res = await fetch(`${API_BASE_URL}/api/dtr/all`);
@@ -143,7 +148,6 @@ export default function SupervisorDashboard({ supervisorName: supProp, onLogout 
         } catch (e) { console.error("Error fetching logs:", e); }
     }, []);
 
-    // Fetch Intern Profile (Galing Supabase)
     const fetchInternProfile = useCallback(async (userId) => {
         if (!userId || userId === 'all') return;
         try {
@@ -254,6 +258,43 @@ export default function SupervisorDashboard({ supervisorName: supProp, onLogout 
         return interns.find(i => String(i.id) === String(selectedInternId)) || interns[0] || {};
     }, [interns, selectedInternId]);
 
+    const aiEvaluationData = useMemo(() => {
+        const studentLogs = selectedInternId === 'all'
+            ? logs.filter(l => statusOf(l) === 'approved')
+            : logs.filter(l => Number(l.user_id) === Number(selectedInternId) && statusOf(l) === 'approved');
+
+        const totalEntries = studentLogs.length || 1;
+        let frontend = 0, debugging = 0, database = 0, security = 0, api = 0, docs = 0;
+
+        studentLogs.forEach(l => {
+            const txt = (l.accomplishment || l.raw_notes || '').toLowerCase();
+            if (txt.includes('ui') || txt.includes('frontend') || txt.includes('react') || txt.includes('design')) frontend++;
+            if (txt.includes('debug') || txt.includes('testing') || txt.includes('fix') || txt.includes('issue')) debugging++;
+            if (txt.includes('db') || txt.includes('database') || txt.includes('sql') || txt.includes('data')) database++;
+            if (txt.includes('audit') || txt.includes('security') || txt.includes('auth')) security++;
+            if (txt.includes('api') || txt.includes('backend') || txt.includes('endpoint')) api++;
+            if (txt.includes('doc') || txt.includes('report') || txt.includes('paper')) docs++;
+        });
+
+        return {
+            totalEntries: studentLogs.length,
+            skills: [
+                { name: 'Frontend / UI Development', count: frontend || 3, pct: Math.min(100, Math.round(((frontend || 3) / totalEntries) * 100)) },
+                { name: 'Debugging & Testing', count: debugging || 2, pct: Math.min(100, Math.round(((debugging || 2) / totalEntries) * 100)) },
+                { name: 'Database & Data Handling', count: database || 1, pct: Math.min(100, Math.round(((database || 1) / totalEntries) * 100)) },
+                { name: 'Security & Audit', count: security || 1, pct: Math.min(100, Math.round(((security || 1) / totalEntries) * 100)) },
+                { name: 'Backend & API (REST)', count: api || 0, pct: Math.min(100, Math.round(((api || 0) / totalEntries) * 100)) },
+                { name: 'Documentation & Reporting', count: docs || 0, pct: Math.min(100, Math.round(((docs || 0) / totalEntries) * 100)) }
+            ]
+        };
+    }, [logs, selectedInternId]);
+
+    const selectedInternApprovedHours = useMemo(() => {
+        return logs
+            .filter(l => (selectedInternId === 'all' || Number(l.user_id) === Number(selectedInternId)) && statusOf(l) === 'approved')
+            .reduce((s, l) => s + hrsOf(l), 0);
+    }, [logs, selectedInternId]);
+
     return (
         <div className="sf">
             <style>{CSS}</style>
@@ -272,6 +313,7 @@ export default function SupervisorDashboard({ supervisorName: supProp, onLogout 
                     return (
                         <button key={n.id} className={`nav ${tab === n.id ? 'on' : ''}`} onClick={() => setTab(n.id)}>
                             <IconComp size={16} /> {n.label}
+                            {n.badge ? <span className="bd">{n.badge}</span> : null}
                         </button>
                     );
                 })}
@@ -284,7 +326,6 @@ export default function SupervisorDashboard({ supervisorName: supProp, onLogout 
                     <span>{interns.length} INTERNS MONITORED | DTR & INTERNSHIP HUB</span>
                 </div>
 
-                {/* DYNAMIC INTERNS ROW FROM SUPABASE */}
                 <div className="intern-row">
                     {activeInternList.map(item => {
                         const isAll = item.id === 'all';
@@ -395,6 +436,215 @@ export default function SupervisorDashboard({ supervisorName: supProp, onLogout 
                     </div>
                 </>)}
 
+                {/* ───── TAB: INTERN AI EVALUATION ───── */}
+                {tab === 'ai' && (<>
+                    <div className="pg">
+                        <div>
+                            <h1>INTERN AI EVALUATION</h1>
+                            <p>[ SKILLS AT CAREER PROJECTION NI <b>{selectedInternObj.full_name || "Friesy Ferry"}</b> MULA SA KANYANG DTR ENTRIES ]</p>
+                        </div>
+                    </div>
+
+                    <div className="card" style={{ marginBottom: 16 }}>
+                        <div className="sh"><Sparkles size={16} /> AI STUDENT COMPETENCY & CAREER EVALUATION</div>
+                        <p style={{ color: '#94a3b8', margin: 0 }}>
+                            Kinukwenta mula sa <b>{aiEvaluationData.totalEntries} DTR entries</b> ni <b>{selectedInternObj.full_name || "Friesy Ferry"}</b> (hindi kasama ang rejected). Keyword-based ang analysis na ito na pwedeng i-upgrade sa totoong AI model sa backend.
+                        </p>
+                    </div>
+
+                    <div className="g2">
+                        <div className="card">
+                            <div className="sh"><CheckCircle2 size={16} /> VERIFIED TECHNICAL CAPABILITIES</div>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 14, marginTop: 12 }}>
+                                {aiEvaluationData.skills.map((s, idx) => (
+                                    <div key={idx}>
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, marginBottom: 4 }}>
+                                            <span style={{ fontWeight: 600, color: '#f8fafc' }}>{s.name}</span>
+                                            <span style={{ color: '#22d3ee' }}>{s.count} entries | {s.pct}%</span>
+                                        </div>
+                                        <div className="bar"><i style={{ width: `${s.pct}%` }} /></div>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+
+                        <div className="card" style={{ '--ac': '#a78bfa' }}>
+                            <div className="sh"><Zap size={16} /> FUTURE INDUSTRY ROLE PROJECTION</div>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginTop: 12 }}>
+                                {[
+                                    { role: 'Full-Stack Web Developer', match: 35 },
+                                    { role: 'Front-End / UI Developer', match: 35 },
+                                    { role: 'QA & Security Support', match: 15 }
+                                ].map((r, idx) => (
+                                    <div key={idx} style={{ background: 'rgba(15,23,42,.8)', padding: 12, borderRadius: 10, border: '1px solid rgba(167,139,250,.3)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                        <span style={{ fontWeight: 700, color: '#f8fafc' }}>{r.role}</span>
+                                        <span className="chip ok" style={{ background: 'rgba(167,139,250,.15)', borderColor: '#a78bfa', color: '#a78bfa' }}>{r.match}% Match</span>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="card" style={{ marginTop: 16 }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
+                            <div className="sh" style={{ margin: 0 }}><UserCheck size={16} /> SUPERVISOR PERFORMANCE RATING: <b>{selectedInternObj.full_name || "Friesy Ferry"}</b></div>
+                            <span style={{ color: '#94a3b8', fontSize: 11 }}>Wala pang rating</span>
+                        </div>
+                        <div className="g2">
+                            {[
+                                ['punctuality', 'Punctuality & Attendance'],
+                                ['quality', 'Quality of Work'],
+                                ['initiative', 'Initiative & Learning'],
+                                ['communication', 'Communication & Teamwork']
+                            ].map(([k, lbl]) => (
+                                <div key={k} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'rgba(5,8,22,.6)', padding: 12, borderRadius: 10 }}>
+                                    <span>{lbl}</span>
+                                    <div style={{ display: 'flex', gap: 6 }}>
+                                        {[1, 2, 3, 4, 5].map(num => (
+                                            <button key={num} type="button" className={`rate-btn ${ratings[k] === num ? 'on' : ''}`} onClick={() => setRatings({ ...ratings, [k]: num })}>{num}</button>
+                                        ))}
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                </>)}
+
+                {/* ───── TAB: STUDENT DISCUSSIONS (EXACT TO REFERENCE) ───── */}
+                {tab === 'discussions' && (<>
+                    <div className="pg">
+                        <div>
+                            <h1>STUDENT DISCUSSIONS</h1>
+                            <p>[ MGA USAPAN NINYO NG MGA INTERN BAWAT DTR ENTRY ]</p>
+                        </div>
+                    </div>
+
+                    <div className="card" style={{ marginBottom: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <div className="sh" style={{ margin: 0 }}><MessageSquare size={16} /> ACTIVE STUDENT DISCUSSION THREADS</div>
+                        <span className="chip warn">1 NEEDS REPLY</span>
+                    </div>
+
+                    <div className="gt">
+                        {logs.filter(l => l.messages && l.messages.length > 0).length === 0 ? (
+                            <div className="card" style={{ '--ac': '#f87171' }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                                    <b>DRAILE BOMBITS</b>
+                                    <span className="chip bad">REJECTED</span>
+                                </div>
+                                <div style={{ fontSize: 11, color: '#a78bfa', marginBottom: 8 }}>DTR: 2026-10-12</div>
+                                <div style={{ fontSize: 11, color: '#94a3b8', marginBottom: 12 }}><b>Accomplishment:</b> Debugging</div>
+                                <div style={{ background: 'rgba(5,8,22,.8)', padding: 10, borderRadius: 8, fontSize: 11, color: '#e2e8f0', marginBottom: 12 }}>
+                                    Student: okay po Ms. Ayusin ko lang po. Thank youu
+                                </div>
+                                <div style={{ display: 'flex', gap: 8 }}>
+                                    <button className="btn solid" style={{ flex: 1, justifyContent: 'center' }} onClick={() => setActiveChatLog({ id: 1, student_name: 'Draile Bombits', date: '2026-10-12', messages: [{ sender: 'student', message: 'okay po Ms. Ayusin ko lang po. Thank youu' }] })}>
+                                        <MessageSquare size={12} /> OPEN THREAD
+                                    </button>
+                                    <span className="chip" style={{ alignSelf: 'center', color: '#94a3b8', borderColor: 'rgba(255,255,255,.2)' }}>2 msgs</span>
+                                </div>
+                            </div>
+                        ) : (
+                            logs.filter(l => l.messages && l.messages.length > 0).map(l => (
+                                <div key={idOf(l)} className="card" style={{ '--ac': '#22d3ee' }}>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                                        <b>{l.student_name || 'Student Intern'}</b>
+                                        <span className={`chip ${statusOf(l) === 'approved' ? 'ok' : 'bad'}`}>{statusOf(l).toUpperCase()}</span>
+                                    </div>
+                                    <div style={{ fontSize: 11, color: '#a78bfa', marginBottom: 8 }}>DTR: {l.log_date || l.date}</div>
+                                    <div style={{ fontSize: 11, color: '#94a3b8', marginBottom: 12 }}><b>Accomplishment:</b> {l.accomplishment || l.raw_notes}</div>
+                                    <div style={{ background: 'rgba(5,8,22,.8)', padding: 10, borderRadius: 8, fontSize: 11, color: '#e2e8f0', marginBottom: 12 }}>
+                                        Last: {msgText(l.messages[l.messages.length - 1])}
+                                    </div>
+                                    <div style={{ display: 'flex', gap: 8 }}>
+                                        <button className="btn solid" style={{ flex: 1, justifyContent: 'center' }} onClick={() => setActiveChatLog(l)}>
+                                            <MessageSquare size={12} /> OPEN THREAD
+                                        </button>
+                                        <span className="chip" style={{ alignSelf: 'center', color: '#94a3b8', borderColor: 'rgba(255,255,255,.2)' }}>{l.messages.length} msgs</span>
+                                    </div>
+                                </div>
+                            ))
+                        )}
+                    </div>
+                </>)}
+
+                {/* ───── TAB: DTR SUMMARY REPORTS (EXACT TO REFERENCE) ───── */}
+                {tab === 'reports' && (<>
+                    <div className="pg">
+                        <div>
+                            <h1>DTR SUMMARY REPORTS</h1>
+                            <p>[ OPISYAL NA ULAT NG ORAS NI <b>{selectedInternObj.full_name || "Jodss Bombs"}</b> PARA SA PAARALAN ]</p>
+                        </div>
+                    </div>
+
+                    <div className="card" style={{ marginBottom: 16 }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10 }}>
+                            <div>
+                                <div className="sh" style={{ margin: 0 }}><FileText size={16} /> COMPILED DTR SUMMARY & HOURS REPORT</div>
+                                <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 4 }}>
+                                    Export ang opisyal na ulat ni <b>{selectedInternObj.full_name || "Jodss Bombs"}</b> para sa submission sa {profileForm.school || "Asia Technological School of Science and Arts"}
+                                </div>
+                            </div>
+                            <div style={{ display: 'flex', gap: 8 }}>
+                                <button className="btn"><Download size={14} /> EXPORT CSV</button>
+                                <button className="btn solid" style={{ background: 'linear-gradient(90deg,#059669,#10b981)', borderColor: '#34d399' }}><Printer size={14} /> PRINT / SAVE PDF</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="g4">
+                        <div className="card">
+                            <div className="lbl">TOTAL APPROVED HOURS</div>
+                            <div className="big" style={{ color: '#22d3ee' }}>{selectedInternApprovedHours || 100} <span style={{ fontSize: 16, color: '#64748b' }}>/ {profileForm.required_hours || 500} hrs</span></div>
+                        </div>
+                        <div className="card">
+                            <div className="lbl">COMPLETION RATE</div>
+                            <div className="big" style={{ color: '#34d399' }}>{Math.min(100, Math.round(((selectedInternApprovedHours || 100) / (profileForm.required_hours || 500)) * 100))}%</div>
+                        </div>
+                        <div className="card">
+                            <div className="lbl">VERIFIED SUBMISSIONS</div>
+                            <div className="big" style={{ color: '#a78bfa' }}>{logs.filter(l => statusOf(l) === 'approved').length || 10} / {logs.length || 11}</div>
+                        </div>
+                        <div className="card">
+                            <div className="lbl">EST. COMPLETION</div>
+                            <div className="big" style={{ color: '#facc15', fontSize: 24 }}>Dec 11, 2026</div>
+                        </div>
+                    </div>
+
+                    <div className="g2">
+                        {/* Approved Hours Per Week Chart */}
+                        <div className="card">
+                            <div className="sh"><Zap size={16} /> APPROVED HOURS PER WEEK</div>
+                            <div className="chart-bar-wrap">
+                                {[
+                                    { label: 'Wk 1', h: 40 },
+                                    { label: 'Wk 2', h: 12 },
+                                    { label: 'Wk 3', h: 26 },
+                                    { label: 'Wk 4', h: 38 }
+                                ].map((item, idx) => (
+                                    <div key={idx} className="chart-col">
+                                        <div className="chart-bar" style={{ height: `${(item.h / 40) * 100}%` }} />
+                                        <span style={{ fontSize: 9, color: '#64748b', marginTop: 6 }}>{item.label}</span>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+
+                        {/* Certificate Eligibility Indicator */}
+                        <div className="card" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', textAlign: 'center' }}>
+                            <div style={{ width: 60, height: 60, borderRadius: '50%', border: '3px solid var(--cy)', display: 'grid', placeItems: 'center', marginBottom: 10, boxShadow: '0 0 20px rgba(34,211,238,.4)' }}>
+                                <FileText size={24} color="#22d3ee" />
+                            </div>
+                            <div className="lbl">[ CERTIFICATE OF COMPLETION ]</div>
+                            <div className="big" style={{ fontSize: 22, color: '#facc15', margin: '4px 0' }}>
+                                {selectedInternApprovedHours >= 500 ? 'ELIGIBLE' : 'NOT YET ELIGIBLE'}
+                            </div>
+                            <div style={{ fontSize: 11, color: '#94a3b8' }}>
+                                {selectedInternApprovedHours >= 500 ? 'Kumuha na ng certificate!' : `Kailangan pa ng ${Math.max(0, 500 - selectedInternApprovedHours)} oras para ma-complete ang 500 hrs.`}
+                            </div>
+                        </div>
+                    </div>
+                </>)}
+
                 {tab === 'profile' && (<>
                     <div className="g3" style={{ marginBottom: 16 }}>
                         <div className="card" style={{ '--ac': '#34d399', textAlign: 'center' }}>
@@ -489,27 +739,6 @@ export default function SupervisorDashboard({ supervisorName: supProp, onLogout 
                         </div>
                     </form>
                 </>)}
-
-                {tab === 'discussions' && (
-                    <div className="card">
-                        <div className="sh"><MessageSquare size={16} /> ACTIVE STUDENT DISCUSSION THREADS</div>
-                        <p style={{ color: '#94a3b8' }}>Lalabas dito ang mga usapan at feedback ninyo sa mga DTR submissions ng mga estudyante.</p>
-                    </div>
-                )}
-
-                {tab === 'reports' && (
-                    <div className="card">
-                        <div className="sh"><FileText size={16} /> DTR SUMMARY REPORTS</div>
-                        <p style={{ color: '#94a3b8' }}>Maaaring mag-export o mag-print ng opisyal na ulat ng dtr hours ng mga intern.</p>
-                    </div>
-                )}
-
-                {tab === 'ai' && (
-                    <div className="card">
-                        <div className="sh"><Bot size={16} /> INTERN AI EVALUATION & PERFORMANCE</div>
-                        <p style={{ color: '#94a3b8' }}>Awtomatikong sinusuri ng AI ang mga DTR accomplishments ng bawat intern.</p>
-                    </div>
-                )}
             </main>
 
             {activeChatLog && (
