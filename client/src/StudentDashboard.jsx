@@ -24,7 +24,7 @@ const parseDate = (s) => { if (!s) return null; const [y, m, d] = String(s).slic
 const fmtDate = (s) => { const d = s instanceof Date ? s : parseDate(s); return d ? d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '—'; };
 const fullUrl = (u) =>
     !u ? null : /^https?:\/\//i.test(u) ? u : `${API_BASE_URL}${u.startsWith('/') ? '' : '/'}${u}`;
-// Same MOA logic as the Supervisor Portal
+
 const getMoaState = (p, today) => {
     if (!p.moaSigned && !p.moaNumber && !p.moaFileUrl && !p.moaValidUntil) return { label: 'NOT RECORDED', cls: 'muted', note: 'Wala pang MOA na naitala ng Supervisor.' };
     if (!p.moaSigned) return { label: 'PENDING SIGNATURE', cls: 'warn', note: 'Hindi pa naka-mark na signed ang MOA.' };
@@ -94,7 +94,7 @@ const polishNotes = (raw) => raw.split(/[,\n;]+|\band\b/i).map(s => s.trim()).fi
     return hit ? `${hit[1]} (${cap}).` : `Completed task: ${cap}.`;
 }).map(l => `• ${l}`).join('\n');
 
-/* ───────────── styles (same visual language as Supervisor Portal) ───────────── */
+/* ───────────── styles ───────────── */
 const CSS = `
 @import url('https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap');
 .sf{--cy:#22d3ee;--vi:#a78bfa;--ok:#34d399;--warn:#facc15;--bad:#f87171;--mut:#64748b;--line:rgba(34,211,238,.3);
@@ -276,7 +276,6 @@ export default function StudentDashboard({ studentName: studentNameProp = 'Stude
         } catch (e) { console.error('Error fetching DTR logs:', e); }
     }, [currentUserId]);
 
-    // Profile + MOA record na sinave ng Supervisor (parehong source: GET /api/interns)
     const fetchInternProfile = useCallback(async () => {
         try {
             const res = await fetch(`${API_BASE_URL}/api/interns`);
@@ -355,10 +354,12 @@ export default function StudentDashboard({ studentName: studentNameProp = 'Stude
         setAccomplishment(log.accomplishment || log.raw_notes || ''); setExistingProofUrl(log.proof_url || ''); setProofFile(null); setIsSubmitModalOpen(true);
     };
 
+    /* ───── FIXED REALTIME SUBMIT & RESUBMIT DTR HANDLER ───── */
     const handleSubmitDTR = async (e) => {
         e.preventDefault();
         const hours = calcHours(timeIn, timeOut);
         if (hours <= 0) { notify('Mali ang oras. Siguraduhing tama ang Time In at Time Out.', true); return; }
+
         setIsSubmitting(true);
         try {
             let proofUrl = existingProofUrl;
@@ -370,18 +371,47 @@ export default function StudentDashboard({ studentName: studentNameProp = 'Stude
                 const d = await up.json();
                 proofUrl = d.proof_url || d.url || '';
             }
-            const payload = { user_id: Number(currentUserId), log_date: logDate, time_in: timeIn, time_out: timeOut, rendered_today: hours, raw_notes: accomplishment, proof_url: proofUrl };
-            if (resubmitTargetLog) payload.dtr_id = idOf(resubmitTargetLog);
-            const res = await fetch(`${API_BASE_URL}/api/dtr/submit`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+
+            const payload = {
+                user_id: Number(currentUserId),
+                student_name: studentName,
+                log_date: logDate,
+                time_in: timeIn,
+                time_out: timeOut,
+                rendered_today: hours,
+                accomplishment: accomplishment,
+                raw_notes: accomplishment,
+                proof_url: proofUrl,
+                status: 'pending' // Automatically resets status to pending on submit/resubmit
+            };
+
+            if (resubmitTargetLog) {
+                payload.dtr_id = idOf(resubmitTargetLog);
+            }
+
+            const res = await fetch(`${API_BASE_URL}/api/dtr/submit`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+
             if (res.ok) {
-                notify(resubmitTargetLog ? 'Na-resubmit na ang DTR mo.' : 'Na-submit na ang DTR.');
-                setIsSubmitModalOpen(false); setResubmitTargetLog(null); fetchDTRLogs();
+                notify(resubmitTargetLog ? 'Na-resubmit na ang DTR mo at naka-PENDING na ulit!' : 'Na-submit na ang DTR!');
+                setIsSubmitModalOpen(false);
+                setResubmitTargetLog(null);
+                setAccomplishment('');
+                setProofFile(null);
+                fetchDTRLogs(); // Instant refresh of student DTR logs
             } else {
                 const err = await res.json().catch(() => ({}));
                 notify('Hindi na-submit: ' + (err.detail || 'Subukang muli.'), true);
             }
-        } catch (err) { console.error(err); notify('Hindi maka-connect sa server. Naka-on ba ang backend?', true); }
-        finally { setIsSubmitting(false); }
+        } catch (err) {
+            console.error(err);
+            notify('Hindi maka-connect sa server. Naka-on ba ang backend?', true);
+        } finally {
+            setIsSubmitting(false);
+        }
     };
 
     const handleSendReply = async (e) => {

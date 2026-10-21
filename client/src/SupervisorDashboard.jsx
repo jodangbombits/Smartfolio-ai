@@ -220,16 +220,33 @@ export default function SupervisorDashboard({ supervisorName: supProp, onLogout 
             const res = await fetch(`${API_BASE_URL}/api/dtr-logs/${logId}/status`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ status: status.toLowerCase(), rejection_reason: reason, remarks: reason })
+                body: JSON.stringify({
+                    status: status.toLowerCase(),
+                    rejection_reason: reason,
+                    remarks: reason
+                })
             });
-            if (res.ok) {
-                notify(`DTR Status: ${status.toUpperCase()}`);
-                fetchAllLogs();
-                setRejectLogTarget(null);
-            }
-        } catch (e) { notify("Error sa pag-update ng status.", true); }
-    };
 
+            if (res.ok) {
+                notify(`DTR Status updated to: ${status.toUpperCase()}`);
+                // Instant local state update para maging realtime ang visual sa table
+                setLogs(prevLogs => prevLogs.map(l => {
+                    if (idOf(l) === logId) {
+                        return { ...l, status: status.toLowerCase(), rejection_reason: reason };
+                    }
+                    return l;
+                }));
+                setRejectLogTarget(null);
+                setRejectionReason('');
+                fetchAllLogs(); // Fetch fresh data from backend
+            } else {
+                notify("Hindi ma-update ang DTR status.", true);
+            }
+        } catch (e) {
+            console.error(e);
+            notify("Error sa pag-update ng DTR status.", true);
+        }
+    };
     const stats = useMemo(() => {
         const pending = logs.filter(l => statusOf(l) === 'pending');
         const approved = logs.filter(l => statusOf(l) === 'approved');
