@@ -392,43 +392,62 @@ export default function StudentDashboard({ studentName: studentNameProp = 'Stude
     const handleSubmitDTR = async (e) => {
         e.preventDefault();
         const hours = calcHours(timeIn, timeOut);
-        if (hours <= 0) { notify('Mali ang oras. Siguraduhing tama ang Time In at Time Out.', true); return; }
+        if (hours <= 0) {
+            notify('Mali ang oras. Siguraduhing tama ang Time In at Time Out.', true);
+            return;
+        }
 
         setIsSubmitting(true);
         try {
-            let proofUrl = existingProofUrl;
+            let proofUrl = existingProofUrl || '';
+
+            // Mag-upload LANG kung may bagong napiling file ang student
             if (proofFile) {
-                const fd = new FormData();
-                fd.append('file', await compressImage(proofFile));
-                const up = await fetch(`${API_BASE_URL}/api/upload`, { method: 'POST', body: fd });
-                if (!up.ok) { notify('Hindi na-upload ang proof. Subukan ulit.', true); return; }
-                const d = await up.json();
-                proofUrl = d.proof_url || d.url || '';
+                try {
+                    const fd = new FormData();
+                    const processedFile = typeof compressImage === 'function' ? await compressImage(proofFile) : proofFile;
+                    fd.append('file', processedFile);
+
+                    const up = await fetch(`${API_BASE_URL}/api/upload`, { method: 'POST', body: fd });
+                    if (up.ok) {
+                        const d = await up.json();
+                        proofUrl = d.proof_url || d.url || proofUrl;
+                    }
+                } catch (upErr) {
+                    console.error("Proof upload failed, keeping existing proof:", upErr);
+                }
             }
+
+            // Tiyaking makuha ang tamang Log ID
+            const targetLogId = resubmitTargetLog ? (resubmitTargetLog.id || resubmitTargetLog.dtr_id || resubmitTargetLog.log_id) : null;
 
             const payload = {
                 user_id: Number(currentUserId),
-                student_name: studentName,
-                log_date: logDate,
-                time_in: timeIn,
-                time_out: timeOut,
-                rendered_today: hours,
-                accomplishment: accomplishment,
-                raw_notes: accomplishment,
-                proof_url: proofUrl,
+                student_name: String(studentName || ''),
+                log_date: String(logDate || ''),
+                time_in: String(timeIn || ''),
+                time_out: String(timeOut || ''),
+                rendered_today: Number(hours),
+                accomplishment: String(accomplishment || ''),
+                raw_notes: String(accomplishment || ''),
+                proof_url: String(proofUrl || ''),
                 status: 'pending'
             };
 
-            if (resubmitTargetLog) {
-                const targetId = Number(resubmitTargetLog.id || resubmitTargetLog.log_id);
-                payload.dtr_id = targetId;
-                payload.id = targetId;
+            if (targetLogId) {
+                payload.dtr_id = Number(targetLogId);
+                payload.id = Number(targetLogId);
             }
+
+            console.log("SENDING DTR PAYLOAD:", payload);
+
             const res = await fetch(`${API_BASE_URL}/api/dtr/submit`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(payload)
             });
+
+            const resData = await res.json().catch(() => ({}));
 
             if (res.ok) {
                 notify(resubmitTargetLog ? 'Na-resubmit na ang DTR mo at naka-PENDING na ulit!' : 'Na-submit na ang DTR!');
@@ -438,13 +457,17 @@ export default function StudentDashboard({ studentName: studentNameProp = 'Stude
                 setProofFile(null);
                 fetchDTRLogs();
             } else {
-                notify('Hindi na-submit. Subukang muli.', true);
+                console.error("SERVER RESPONSE ERROR:", resData);
+                const errDetail = resData.detail || resData.message || 'Hindi na-submit. Subukang muli.';
+                notify(`Error (${res.status}): ${typeof errDetail === 'object' ? JSON.stringify(errDetail) : errDetail}`, true);
             }
         } catch (err) {
-            notify('Hindi maka-connect sa server.', true);
+            console.error("FRONTEND SUBMIT EXCEPTION:", err);
+            notify('Hindi na-submit. May problema sa submission request.', true);
         } finally {
             setIsSubmitting(false);
         }
+    };
     };
     const handleSendReply = async (e) => {
         e.preventDefault();
@@ -889,4 +912,6 @@ export default function StudentDashboard({ studentName: studentNameProp = 'Stude
             {toast && <div className={`toast ${toast.err ? 'err' : ''}`} role="status">{toast.msg}</div>}
         </div>
     );
-}
+
+
+
