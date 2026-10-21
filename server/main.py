@@ -552,3 +552,13 @@ async def get_intern_profile(identifier: str):
         return parsed_data
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+        @app.get("/api/interns/{user_id}/profile")
+async def get_intern_profile_alias(user_id: int):
+    return await get_intern_profile(str(user_id))
+
+@app.post("/api/interns/{user_id}/profile")
+@app.put("/api/interns/{user_id}/profile")
+async def save_intern_profile_alias(user_id: int, payload: InternProfileSchema):
+    payload.user_id = user_id
+    return await save_intern_profile(payload)
