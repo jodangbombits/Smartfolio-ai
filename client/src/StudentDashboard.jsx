@@ -469,46 +469,50 @@ export default function StudentDashboard({ studentName: studentNameProp = 'Stude
     };
 };
 const handleSendReply = async (e) => {
-        e.preventDefault();
-        if (!replyText.trim() || !activeChatLog || isSendingChat) return;
-        setIsSendingChat(true);
-        const logId = idOf(activeChatLog), text = replyText.trim();
-        setReplyText('');
-        
-        const newMsg = {
-            sender: 'student',
-            message: text,
-            timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-        };
+    e.preventDefault();
+    if (!replyText.trim() || !activeChatLog || isSendingChat) return;
 
-        // Aggressive Optimistic UI — Idagdag agad sa local state para HINDI NA MAWALA!
-        setLogs(prev => prev.map(l => {
-            if (idOf(l) === logId) {
-                const curMsgs = Array.isArray(l.messages) ? l.messages : [];
-                return { ...l, messages: [...curMsgs, newMsg] };
-            }
-            return l;
-        }));
+    setIsSendingChat(true);
+    const logId = idOf(activeChatLog);
+    const text = replyText.trim();
+    setReplyText('');
 
-        try {
-            const res = await fetch(`${API_BASE_URL}/api/dtr/${logId}/messages`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ sender: 'student', message: text })
-            });
-
-            if (res.ok) {
-                notify('Naipadala na ang mensahe!');
-                fetchDTRLogs();
-            } else {
-                console.error("Message send server error:", res.status);
-            }
-        } catch (err) {
-            console.error("Chat fetch error:", err);
-        } finally {
-            setIsSendingChat(false);
-        }
+    const newMsg = {
+        id: Date.now(),
+        sender: 'student',
+        message: text,
+        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
     };
+
+    // 1. I-append agad sa local state
+    setLogs(prev => prev.map(l => {
+        if (idOf(l) === logId) {
+            const existing = Array.isArray(l.messages) ? l.messages : [];
+            return { ...l, messages: [...existing, newMsg] };
+        }
+        return l;
+    }));
+
+    try {
+        const res = await fetch(`${API_BASE_URL}/api/dtr/${logId}/messages`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ sender: 'student', message: text })
+        });
+
+        if (res.ok) {
+            // I-refresh ang logs para makuha ang opisyal na ID at timestamp mula sa DB
+            await fetchDTRLogs();
+        } else {
+            notify('Hindi na-save ang message sa server.', true);
+        }
+    } catch (err) {
+        console.error("Chat error:", err);
+        notify('Network error sa pagse-send ng chat.', true);
+    } finally {
+        setIsSendingChat(false);
+    }
+};
 
 const handleLogout = () => { if (onLogout) onLogout(); else { localStorage.clear(); window.location.reload(); } };
 const copy = async (t, ok = 'Na-copy.') => { try { await navigator.clipboard.writeText(t); notify(ok); } catch { notify('Hindi ma-copy.', true); } };
