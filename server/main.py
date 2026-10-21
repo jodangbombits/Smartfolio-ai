@@ -469,3 +469,79 @@ async def get_interns():
         return res.data or []
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+        # =====================================================================
+# INTERN PROFILE SAVE & FETCH ENDPOINTS (FOR SUPERVISOR & STUDENT)
+# =====================================================================
+class InternProfileSchema(BaseModel):
+    user_id: Optional[int] = None
+    email: Optional[str] = None
+    school: Optional[str] = ""
+    course: Optional[str] = ""
+    year_level: Optional[str] = ""
+    adviser: Optional[str] = ""
+    contact: Optional[str] = ""
+    host_company: Optional[str] = ""
+    department: Optional[str] = ""
+    start_date: Optional[str] = ""
+    end_date: Optional[str] = ""
+    required_hours: Optional[int] = 500
+    moa_ref_no: Optional[str] = ""
+    moa_signed: Optional[bool] = False
+    endorsement_letter: Optional[bool] = False
+    parent_consent: Optional[bool] = False
+    medical_clearance: Optional[bool] = False
+
+
+@app.post("/api/intern-profile/save")
+async def save_intern_profile(payload: InternProfileSchema):
+    if not supabase:
+        raise HTTPException(status_code=500, detail="Database client not configured")
+    try:
+        data = payload.dict(exclude_unset=True)
+        query = supabase.table("intern_profiles").select("*")
+        if payload.user_id:
+            query = query.eq("user_id", payload.user_id)
+        elif payload.email:
+            query = query.eq("email", payload.email)
+
+        existing = query.execute()
+
+        if existing.data:
+            res = (
+                supabase.table("intern_profiles")
+                .update(data)
+                .eq("id", existing.data[0]["id"])
+                .execute()
+            )
+        else:
+            res = supabase.table("intern_profiles").insert(data).execute()
+
+        return {"message": "Profile saved successfully", "data": res.data}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/intern-profile/{identifier}")
+async def get_intern_profile(identifier: str):
+    if not supabase:
+        raise HTTPException(status_code=500, detail="Database client not configured")
+    try:
+        if identifier.isdigit():
+            res = (
+                supabase.table("intern_profiles")
+                .select("*")
+                .eq("user_id", int(identifier))
+                .execute()
+            )
+        else:
+            res = (
+                supabase.table("intern_profiles")
+                .select("*")
+                .eq("email", identifier.lower())
+                .execute()
+            )
+
+        return res.data[0] if res.data else {}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
