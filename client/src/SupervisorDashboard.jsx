@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
     LayoutDashboard, UserCheck, Bot, MessageSquare, FileText,
     CheckCircle2, XCircle, Search, Eye, Save,
-    Users, LogOut, Zap, Send, Download, Printer
+    Users, LogOut, Zap, Send, Download, Printer, Paperclip
 } from 'lucide-react';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || "http://127.0.0.1:8000";
@@ -14,7 +14,7 @@ const statusOf = (l) => (l.status || 'pending').toLowerCase();
 const msgText = (m) => typeof m === 'string' ? m : (m.message || m.text || m.remark || m.content || '');
 const fullUrl = (u) => !u ? null : /^https?:\/\//i.test(u) ? u : `${API_BASE_URL}${u.startsWith('/') ? '' : '/'}${u}`;
 
-/* ───────────── CSS Styles (Exact Cyberpunk Layout) ───────────── */
+/* ───────────── Exact Cyberpunk Styling ───────────── */
 const CSS = `
 @import url('https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap');
 .sf{--cy:#22d3ee;--vi:#a78bfa;--ok:#34d399;--warn:#facc15;--bad:#f87171;--mut:#64748b;--line:rgba(34,211,238,.3);
@@ -91,37 +91,27 @@ const NAV = [
     { id: 'review', label: 'DTR Review Portal', icon: LayoutDashboard },
     { id: 'profile', label: 'Intern Profile & MOA', icon: UserCheck },
     { id: 'ai', label: 'Intern AI Evaluation', icon: Bot },
-    { id: 'discussions', label: 'Student Discussions', icon: MessageSquare, badge: 1 },
+    { id: 'discussions', label: 'Student Discussions', icon: MessageSquare },
     { id: 'reports', label: 'DTR Summary Reports', icon: FileText }
 ];
 
-export default function SupervisorDashboard({ supervisorName = "Friesy Ferry", onLogout }) {
+export default function SupervisorDashboard({ supervisorName: supProp, onLogout }) {
+    const savedUser = JSON.parse(localStorage.getItem('user') || '{}');
+    const supervisorName = supProp || savedUser.full_name || "Jodilyn M. Bombita";
+
     const [tab, setTab] = useState('review');
     const [selectedInternId, setSelectedInternId] = useState('all');
     const [statusFilter, setStatusFilter] = useState('all');
     const [search, setSearch] = useState('');
     const [toast, setToast] = useState(null);
     const [logs, setLogs] = useState([]);
+    const [interns, setInterns] = useState([]);
 
     const [profileForm, setProfileForm] = useState({
-        school: 'Asia Technological School of Science and Arts',
-        email: 'jodilyn1290@gmail.com',
-        course: 'BSIT',
-        year_level: '3rd Year',
-        adviser: 'Ms. Bombita',
-        contact: 'jodilyn1290@gmail.com',
-        host_company: 'SmartFolio',
-        department: 'Collaboration',
-        start_date: '2026-10-12',
-        end_date: '2026-04-11',
-        required_hours: 500,
-        moa_ref_no: 'MOA-2026-21',
-        moa_date_signed: '2026-10-12',
-        moa_valid_until: '2026-04-23',
-        moa_signed: true,
-        endorsement_letter: true,
-        parent_consent: true,
-        medical_clearance: true
+        school: '', email: '', course: '', year_level: '', adviser: '', contact: '',
+        host_company: '', department: '', start_date: '', end_date: '', required_hours: 500,
+        moa_ref_no: '', moa_date_signed: '', moa_valid_until: '', moa_signed: false,
+        endorsement_letter: false, parent_consent: false, medical_clearance: false
     });
 
     const [activeChatLog, setActiveChatLog] = useState(null);
@@ -131,15 +121,18 @@ export default function SupervisorDashboard({ supervisorName = "Friesy Ferry", o
 
     const notify = (msg, err = false) => { setToast({ msg, err }); setTimeout(() => setToast(null), 3200); };
 
-    const staticInterns = [
-        { id: 'all', name: 'All Interns', sub: '5 intern(s)', pending: 1, reply: 1 },
-        { id: 2, name: 'Jodss Bombs', sub: 'Asia Technological School of Sc...', hours: 100, pending: 2, reply: true, moaExpired: true },
-        { id: 3, name: 'Draile Bombits', sub: 'Kulang school info', hours: 26, pending: 1, reply: true, moaNotRecorded: true },
-        { id: 4, name: 'Jhowdeee', sub: 'Kulang school info', hours: 0, moaNotRecorded: true },
-        { id: 5, name: 'Jodengot', sub: 'Kulang school info', hours: 38, moaNotRecorded: true },
-        { id: 6, name: 'Yanyan', sub: 'Kulang school info', hours: 38, moaNotRecorded: true }
-    ];
+    // Fetch DB interns (Galing Supabase)
+    const fetchInternsList = useCallback(async () => {
+        try {
+            const res = await fetch(`${API_BASE_URL}/api/interns`);
+            if (res.ok) {
+                const data = await res.json();
+                setInterns(Array.isArray(data) ? data : []);
+            }
+        } catch (e) { console.error("Error fetching interns:", e); }
+    }, []);
 
+    // Fetch DB DTR Logs (Galing Supabase)
     const fetchAllLogs = useCallback(async () => {
         try {
             const res = await fetch(`${API_BASE_URL}/api/dtr/all`);
@@ -150,6 +143,7 @@ export default function SupervisorDashboard({ supervisorName = "Friesy Ferry", o
         } catch (e) { console.error("Error fetching logs:", e); }
     }, []);
 
+    // Fetch Intern Profile (Galing Supabase)
     const fetchInternProfile = useCallback(async (userId) => {
         if (!userId || userId === 'all') return;
         try {
@@ -165,34 +159,35 @@ export default function SupervisorDashboard({ supervisorName = "Friesy Ferry", o
                     }
                 }
                 setProfileForm({
-                    school: p.school || 'Asia Technological School of Science and Arts',
-                    email: p.email || 'jodilyn1290@gmail.com',
-                    course: p.course || 'BSIT',
-                    year_level: p.year_level || '3rd Year',
-                    adviser: p.adviser || 'Ms. Bombita',
-                    contact: p.contact || 'jodilyn1290@gmail.com',
-                    host_company: p.host_company || 'SmartFolio',
-                    department: p.department || 'Collaboration',
-                    start_date: p.start_date || '2026-10-12',
-                    end_date: p.end_date || '2026-04-11',
+                    school: p.school || p.p_school || '',
+                    email: p.email || '',
+                    course: p.course || p.p_course || '',
+                    year_level: p.year_level || p.p_year_level || '',
+                    adviser: p.adviser || p.school_coordinator || '',
+                    contact: p.contact || p.contact_number || '',
+                    host_company: p.host_company || '',
+                    department: p.department || '',
+                    start_date: p.start_date || '',
+                    end_date: p.end_date || '',
                     required_hours: p.required_hours || 500,
-                    moa_ref_no: p.moa_ref_no || 'MOA-2026-21',
-                    moa_date_signed: p.moa_date_signed || '2026-10-12',
-                    moa_valid_until: p.moa_valid_until || '2026-04-23',
-                    moa_signed: Boolean(p.moa_signed ?? true),
-                    endorsement_letter: Boolean(p.endorsement_letter ?? true),
-                    parent_consent: Boolean(p.parent_consent ?? true),
-                    medical_clearance: Boolean(p.medical_clearance ?? true)
+                    moa_ref_no: p.moa_ref_no || '',
+                    moa_date_signed: p.moa_date_signed || '',
+                    moa_valid_until: p.moa_valid_until || '',
+                    moa_signed: Boolean(p.moa_signed),
+                    endorsement_letter: Boolean(p.endorsement_letter),
+                    parent_consent: Boolean(p.parent_consent),
+                    medical_clearance: Boolean(p.medical_clearance)
                 });
             }
         } catch (e) { console.error("Error fetching profile:", e); }
     }, []);
 
     useEffect(() => {
+        fetchInternsList();
         fetchAllLogs();
-        const interval = setInterval(fetchAllLogs, 4000);
+        const interval = setInterval(() => { fetchAllLogs(); fetchInternsList(); }, 4000);
         return () => clearInterval(interval);
-    }, [fetchAllLogs]);
+    }, [fetchAllLogs, fetchInternsList]);
 
     useEffect(() => {
         if (selectedInternId !== 'all') fetchInternProfile(selectedInternId);
@@ -200,7 +195,7 @@ export default function SupervisorDashboard({ supervisorName = "Friesy Ferry", o
 
     const handleSaveProfile = async (e) => {
         e.preventDefault();
-        const targetId = selectedInternId === 'all' ? 2 : selectedInternId;
+        const targetId = selectedInternId === 'all' ? (interns[0]?.id || 2) : selectedInternId;
         try {
             const payload = { user_id: Number(targetId), ...profileForm };
             const res = await fetch(`${API_BASE_URL}/api/interns/${targetId}/profile`, {
@@ -240,6 +235,7 @@ export default function SupervisorDashboard({ supervisorName = "Friesy Ferry", o
 
     const visibleLogs = useMemo(() => {
         return logs.filter(l => {
+            if (selectedInternId !== 'all' && Number(l.user_id) !== Number(selectedInternId)) return false;
             const st = statusOf(l);
             if (statusFilter === 'pending' && st !== 'pending') return false;
             if (statusFilter === 'approved' && st !== 'approved') return false;
@@ -247,7 +243,16 @@ export default function SupervisorDashboard({ supervisorName = "Friesy Ferry", o
             const q = search.toLowerCase();
             return `${l.student_name || ''} ${l.log_date || ''} ${l.accomplishment || l.raw_notes || ''}`.toLowerCase().includes(q);
         });
-    }, [logs, statusFilter, search]);
+    }, [logs, selectedInternId, statusFilter, search]);
+
+    const activeInternList = useMemo(() => {
+        const list = [{ id: 'all', full_name: 'All Interns', email: `${interns.length} intern(s)` }, ...interns];
+        return list;
+    }, [interns]);
+
+    const selectedInternObj = useMemo(() => {
+        return interns.find(i => String(i.id) === String(selectedInternId)) || interns[0] || {};
+    }, [interns, selectedInternId]);
 
     return (
         <div className="sf">
@@ -256,9 +261,9 @@ export default function SupervisorDashboard({ supervisorName = "Friesy Ferry", o
             <aside className="sf-side">
                 <div className="sf-logo"><Zap size={18} /> SmartFolio Hub</div>
                 <div className="sf-me">
-                    <div className="av">F</div>
-                    <div>
-                        <div style={{ fontWeight: 700, fontSize: 13 }}>{supervisorName}</div>
+                    <div className="av">{supervisorName.charAt(0).toUpperCase()}</div>
+                    <div style={{ minWidth: 0 }}>
+                        <div className="hd" style={{ fontWeight: 700, fontSize: 13, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{supervisorName}</div>
                         <div style={{ fontSize: 10, color: '#a78bfa' }}>OJT Supervisor Portal</div>
                     </div>
                 </div>
@@ -267,7 +272,6 @@ export default function SupervisorDashboard({ supervisorName = "Friesy Ferry", o
                     return (
                         <button key={n.id} className={`nav ${tab === n.id ? 'on' : ''}`} onClick={() => setTab(n.id)}>
                             <IconComp size={16} /> {n.label}
-                            {n.badge ? <span className="bd">{n.badge}</span> : null}
                         </button>
                     );
                 })}
@@ -277,31 +281,36 @@ export default function SupervisorDashboard({ supervisorName = "Friesy Ferry", o
             <main className="sf-main">
                 <div className="top">
                     <span><span className="dot" />SYS ONLINE // SUPERVISOR SESSION</span>
-                    <span>5 INTERNS MONITORED | DTR & INTERNSHIP HUB</span>
+                    <span>{interns.length} INTERNS MONITORED | DTR & INTERNSHIP HUB</span>
                 </div>
 
+                {/* DYNAMIC INTERNS ROW FROM SUPABASE */}
                 <div className="intern-row">
-                    {staticInterns.map(item => (
-                        <div key={item.id} className={`intern-card ${selectedInternId === item.id ? 'on' : ''}`} onClick={() => setSelectedInternId(item.id)}>
-                            <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 4 }}>
-                                <div className="av" style={{ width: 24, height: 24, fontSize: 11 }}>{item.name.charAt(0)}</div>
-                                <div style={{ fontWeight: 700, fontSize: 12, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.name}</div>
-                            </div>
-                            <div style={{ fontSize: 10, color: '#64748b', marginBottom: 6 }}>{item.sub}</div>
-                            {item.hours !== undefined && (
-                                <div style={{ fontSize: 10, color: '#22d3ee' }}>
-                                    <b>{item.hours}</b> / 500 hrs
-                                    <div className="bar"><i style={{ width: `${(item.hours / 500) * 100}%` }} /></div>
+                    {activeInternList.map(item => {
+                        const isAll = item.id === 'all';
+                        const studentLogs = isAll ? logs : logs.filter(l => Number(l.user_id) === Number(item.id));
+                        const pCount = studentLogs.filter(l => statusOf(l) === 'pending').length;
+                        const hrs = studentLogs.filter(l => statusOf(l) === 'approved').reduce((s, l) => s + hrsOf(l), 0);
+
+                        return (
+                            <div key={item.id} className={`intern-card ${selectedInternId === item.id ? 'on' : ''}`} onClick={() => setSelectedInternId(item.id)}>
+                                <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 4 }}>
+                                    <div className="av" style={{ width: 24, height: 24, fontSize: 11 }}>{(item.full_name || 'I').charAt(0)}</div>
+                                    <div style={{ fontWeight: 700, fontSize: 12, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.full_name}</div>
                                 </div>
-                            )}
-                            <div style={{ display: 'flex', gap: 4, marginTop: 6, flexWrap: 'wrap' }}>
-                                {item.pending ? <span className="chip warn" style={{ fontSize: 9 }}>{item.pending} pending</span> : null}
-                                {item.reply ? <span className="chip bad" style={{ fontSize: 9 }}>1 reply</span> : null}
-                                {item.moaExpired ? <span className="chip bad" style={{ fontSize: 9 }}>MOA EXPIRED</span> : null}
-                                {item.moaNotRecorded ? <span className="chip muted" style={{ fontSize: 9 }}>MOA NOT RECORDED</span> : null}
+                                <div style={{ fontSize: 10, color: '#64748b', marginBottom: 6, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.email}</div>
+                                {!isAll && (
+                                    <div style={{ fontSize: 10, color: '#22d3ee' }}>
+                                        <b>{hrs}</b> / 500 hrs
+                                        <div className="bar"><i style={{ width: `${Math.min(100, (hrs / 500) * 100)}%` }} /></div>
+                                    </div>
+                                )}
+                                <div style={{ display: 'flex', gap: 4, marginTop: 6, flexWrap: 'wrap' }}>
+                                    {pCount > 0 ? <span className="chip warn" style={{ fontSize: 9 }}>{pCount} pending</span> : <span className="chip ok" style={{ fontSize: 9 }}>Up to date</span>}
+                                </div>
                             </div>
-                        </div>
-                    ))}
+                        );
+                    })}
                 </div>
 
                 {tab === 'review' && (<>
@@ -322,7 +331,7 @@ export default function SupervisorDashboard({ supervisorName = "Friesy Ferry", o
                     <div className="card" style={{ marginBottom: 16 }}>
                         <div className="sh"><Users size={16} /> ALL INTERNS OVERVIEW</div>
                         <p style={{ color: '#94a3b8', margin: 0 }}>
-                            Nakikita mo ang DTR ng 5 intern. Pumili ng intern sa itaas, o i-search ang pangalan niya, para makita ang kanyang school, MOA at requirements: <span style={{ color: '#facc15' }}>May intern na may MOA na kailangang asikasuhin</span>
+                            Nakikita mo ang DTR ng {interns.length} intern. Pumili ng intern sa itaas para mag-filter ng kanyang submissions.
                         </p>
                     </div>
 
@@ -340,14 +349,14 @@ export default function SupervisorDashboard({ supervisorName = "Friesy Ferry", o
                             <div className="lbl">REJECTED / NEEDS REVISION</div>
                         </div>
                         <div className="card" style={{ textAlign: 'center', '--ac': '#a78bfa' }}>
-                            <div className="big" style={{ color: '#a78bfa' }}>5</div>
+                            <div className="big" style={{ color: '#a78bfa' }}>{interns.length}</div>
                             <div className="lbl">ACTIVE INTERNS</div>
                         </div>
                     </div>
 
                     <div className="card">
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
-                            <div className="sh" style={{ margin: 0 }}><FileText size={16} /> STUDENT DTR LOGS REVIEW (ALL INTERNS)</div>
+                            <div className="sh" style={{ margin: 0 }}><FileText size={16} /> STUDENT DTR LOGS REVIEW</div>
                             <div style={{ display: 'flex', gap: 6 }}>
                                 {[['all', 'ALL', logs.length], ['pending', 'PENDING', stats.pending.length], ['approved', 'APPROVED', stats.approved.length], ['rejected', 'REJECTED', stats.rejected.length]].map(([k, label, count]) => (
                                     <button key={k} className={`pill ${statusFilter === k ? 'on' : ''}`} onClick={() => setStatusFilter(k)}>{label} [{count}]</button>
@@ -364,7 +373,7 @@ export default function SupervisorDashboard({ supervisorName = "Friesy Ferry", o
                                     {visibleLogs.length === 0 && <tr><td colSpan="8" style={{ textAlign: 'center', color: '#64748b', padding: 24 }}>Walang nahanap na DTR submission.</td></tr>}
                                     {visibleLogs.map(l => (
                                         <tr key={idOf(l)}>
-                                            <td style={{ fontWeight: 700, color: '#f8fafc' }}>{l.student_name || 'Jodss Bombs'}</td>
+                                            <td style={{ fontWeight: 700, color: '#f8fafc' }}>{l.student_name || 'Student Intern'}</td>
                                             <td style={{ color: '#22d3ee' }}>{l.log_date || l.date}</td>
                                             <td>{l.time_in || '08:00'} - {l.time_out || '18:00'}</td>
                                             <td style={{ color: '#38bdf8', fontWeight: 700 }}>{hrsOf(l)} hrs</td>
@@ -390,19 +399,23 @@ export default function SupervisorDashboard({ supervisorName = "Friesy Ferry", o
                     <div className="g3" style={{ marginBottom: 16 }}>
                         <div className="card" style={{ '--ac': '#34d399', textAlign: 'center' }}>
                             <div className="lbl">[ REQUIREMENTS ]</div>
-                            <div className="big" style={{ color: '#34d399' }}>4 / 4</div>
+                            <div className="big" style={{ color: '#34d399' }}>{[profileForm.moa_signed, profileForm.endorsement_letter, profileForm.parent_consent, profileForm.medical_clearance].filter(Boolean).length} / 4</div>
                             <div className="lbl">COMPLETE</div>
                         </div>
-                        <div className="card" style={{ '--ac': '#f87171', textAlign: 'center' }}>
+                        <div className="card" style={{ '--ac': profileForm.moa_signed ? '#34d399' : '#facc15', textAlign: 'center' }}>
                             <div className="lbl">[ MOA STATUS ]</div>
-                            <div style={{ margin: '10px 0' }}><span className="chip bad">EXPIRED</span></div>
-                            <div style={{ fontSize: 11, color: '#fca5a5' }}>Nag-expire noong Apr 23, 2026.</div>
+                            <div style={{ margin: '10px 0' }}>
+                                <span className={`chip ${profileForm.moa_signed ? 'ok' : 'warn'}`}>{profileForm.moa_signed ? 'SIGNED' : 'PENDING'}</span>
+                            </div>
+                            <div style={{ fontSize: 11, color: '#94a3b8' }}>{profileForm.moa_valid_until ? `Valid until ${profileForm.moa_valid_until}` : 'Walang petsa'}</div>
                         </div>
                         <div className="card" style={{ '--ac': '#22d3ee' }}>
                             <div className="lbl">[ INTERNSHIP PROGRESS ]</div>
-                            <div className="big">100 <span style={{ fontSize: 16, color: '#64748b' }}>/ 500 hrs</span></div>
+                            <div className="big">
+                                {logs.filter(l => statusOf(l) === 'approved' && (selectedInternId === 'all' || Number(l.user_id) === Number(selectedInternId))).reduce((s, l) => s + hrsOf(l), 0)}
+                                <span style={{ fontSize: 16, color: '#64748b' }}> / {profileForm.required_hours} hrs</span>
+                            </div>
                             <div className="bar"><i style={{ width: '20%' }} /></div>
-                            <div style={{ fontSize: 10.5, color: '#64748b', marginTop: 6 }}>Natitira: 400 hrs | Est. tapos: Dec 11, 2026</div>
                         </div>
                     </div>
 
@@ -411,8 +424,8 @@ export default function SupervisorDashboard({ supervisorName = "Friesy Ferry", o
                             <div className="card">
                                 <div className="sh"><UserCheck size={16} /> SCHOOL / INTERN INFORMATION</div>
                                 <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                                    <div><label className="lbl">PANGALAN (GALING SA STUDENT ACCOUNT)</label><input className="in sq" value="Jodss Bombs" readOnly /></div>
-                                    <div><label className="lbl">EMAIL NG ACCOUNT</label><input className="in sq" value={profileForm.email} onChange={e => setProfileForm({ ...profileForm, email: e.target.value })} /></div>
+                                    <div><label className="lbl">PANGALAN (GALING SA STUDENT ACCOUNT)</label><input className="in sq" value={selectedInternObj.full_name || "N/A"} readOnly /></div>
+                                    <div><label className="lbl">EMAIL NG ACCOUNT</label><input className="in sq" value={profileForm.email || selectedInternObj.email || ''} onChange={e => setProfileForm({ ...profileForm, email: e.target.value })} /></div>
                                     <div><label className="lbl">PAARALAN / UNIVERSITY</label><input className="in sq" value={profileForm.school} onChange={e => setProfileForm({ ...profileForm, school: e.target.value })} /></div>
                                     <div className="g2" style={{ margin: 0 }}>
                                         <div><label className="lbl">COURSE / DEGREE</label><input className="in sq" value={profileForm.course} onChange={e => setProfileForm({ ...profileForm, course: e.target.value })} /></div>
@@ -470,7 +483,6 @@ export default function SupervisorDashboard({ supervisorName = "Friesy Ferry", o
                                     ))}
                                 </div>
                                 <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 18 }}>
-                                    <button type="button" className="btn">RESET</button>
                                     <button type="submit" className="btn solid"><Save size={14} /> SAVE PROFILE</button>
                                 </div>
                             </div>
@@ -478,85 +490,24 @@ export default function SupervisorDashboard({ supervisorName = "Friesy Ferry", o
                     </form>
                 </>)}
 
-                {tab === 'discussions' && (<>
-                    <div className="pg">
-                        <div>
-                            <h1>STUDENT DISCUSSIONS</h1>
-                            <p>[ MGA USAPAN NINYO NG MGA INTERN BAWAT DTR ENTRY ]</p>
-                        </div>
+                {tab === 'discussions' && (
+                    <div className="card">
+                        <div className="sh"><MessageSquare size={16} /> ACTIVE STUDENT DISCUSSION THREADS</div>
+                        <p style={{ color: '#94a3b8' }}>Lalabas dito ang mga usapan at feedback ninyo sa mga DTR submissions ng mga estudyante.</p>
                     </div>
+                )}
 
-                    <div className="card" style={{ marginBottom: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <div className="sh" style={{ margin: 0 }}><MessageSquare size={16} /> ACTIVE STUDENT DISCUSSION THREADS</div>
-                        <span className="chip warn">1 NEEDS REPLY</span>
+                {tab === 'reports' && (
+                    <div className="card">
+                        <div className="sh"><FileText size={16} /> DTR SUMMARY REPORTS</div>
+                        <p style={{ color: '#94a3b8' }}>Maaaring mag-export o mag-print ng opisyal na ulat ng dtr hours ng mga intern.</p>
                     </div>
-
-                    <div className="gt">
-                        <div className="card" style={{ '--ac': '#f87171' }}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-                                <b>DRAILE BOMBITS</b>
-                                <span className="chip bad">REJECTED</span>
-                            </div>
-                            <div style={{ fontSize: 11, color: '#a78bfa', marginBottom: 8 }}>DTR: 2026-10-12</div>
-                            <div style={{ fontSize: 11, color: '#94a3b8', marginBottom: 12 }}><b>Accomplishment:</b> Debugging</div>
-                            <div style={{ background: 'rgba(5,8,22,.8)', padding: 10, borderRadius: 8, fontSize: 11, color: '#e2e8f0', marginBottom: 12 }}>
-                                Student: okay po Ms. Ayusin ko lang po. Thank youu
-                            </div>
-                            <div style={{ display: 'flex', gap: 8 }}>
-                                <button className="btn solid" style={{ flex: 1, justifyContent: 'center' }} onClick={() => setActiveChatLog({ id: 1, student_name: 'Draile Bombits', date: '2026-10-12', messages: [{ sender: 'student', message: 'okay po Ms. Ayusin ko lang po. Thank youu' }] })}>
-                                    <MessageSquare size={12} /> OPEN THREAD
-                                </button>
-                                <span className="chip" style={{ alignSelf: 'center', color: '#94a3b8', borderColor: 'rgba(255,255,255,.2)' }}>2 msgs</span>
-                            </div>
-                        </div>
-                    </div>
-                </>)}
-
-                {tab === 'reports' && (<>
-                    <div className="pg">
-                        <div>
-                            <h1>DTR SUMMARY REPORTS</h1>
-                            <p>[ OPISYAL NA ULAT NG ORAS NI JODSS BOMBS PARA SA PAARALAN ]</p>
-                        </div>
-                    </div>
-
-                    <div className="card" style={{ marginBottom: 16 }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                            <div>
-                                <div className="sh" style={{ margin: 0 }}><FileText size={16} /> COMPILED DTR SUMMARY & HOURS REPORT</div>
-                                <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 4 }}>Export ang opisyal na ulat ni Jodss Bombs para sa submission sa Asia Technological School of Science and Arts</div>
-                            </div>
-                            <div style={{ display: 'flex', gap: 8 }}>
-                                <button className="btn"><Download size={14} /> EXPORT CSV</button>
-                                <button className="btn solid" style={{ background: 'linear-gradient(90deg,#059669,#10b981)', borderColor: '#34d399' }}><Printer size={14} /> PRINT / SAVE PDF</button>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div className="g4">
-                        <div className="card">
-                            <div className="lbl">TOTAL APPROVED HOURS</div>
-                            <div className="big" style={{ color: '#22d3ee' }}>100 <span style={{ fontSize: 16, color: '#64748b' }}>/ 500 hrs</span></div>
-                        </div>
-                        <div className="card">
-                            <div className="lbl">COMPLETION RATE</div>
-                            <div className="big" style={{ color: '#34d399' }}>20%</div>
-                        </div>
-                        <div className="card">
-                            <div className="lbl">VERIFIED SUBMISSIONS</div>
-                            <div className="big" style={{ color: '#a78bfa' }}>10 / 11</div>
-                        </div>
-                        <div className="card">
-                            <div className="lbl">EST. COMPLETION</div>
-                            <div className="big" style={{ color: '#facc15', fontSize: 24 }}>Dec 11, 2026</div>
-                        </div>
-                    </div>
-                </>)}
+                )}
 
                 {tab === 'ai' && (
                     <div className="card">
                         <div className="sh"><Bot size={16} /> INTERN AI EVALUATION & PERFORMANCE</div>
-                        <p style={{ color: '#94a3b8' }}>Awtomatikong sinusuri ng AI ang mga DTR accomplishments at ginagawan ng competency analysis ang bawat intern.</p>
+                        <p style={{ color: '#94a3b8' }}>Awtomatikong sinusuri ng AI ang mga DTR accomplishments ng bawat intern.</p>
                     </div>
                 )}
             </main>
