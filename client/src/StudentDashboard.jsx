@@ -302,13 +302,14 @@ export default function StudentDashboard({ studentName: studentNameProp = 'Stude
     const fetchDTRLogs = useCallback(async () => {
         if (!currentUserId) return;
         try {
-            const cleanUserId = String(currentUserId).split(':')[0].replace(/[^0-9]/g, '');
+            // Linisin ang User ID para integer lang ang ipadala
+            const cleanUserId = Number(String(currentUserId).split(':')[0].replace(/[^0-9]/g, '')) || currentUserId;
             const res = await fetch(`${API_BASE_URL}/api/dtr/${cleanUserId}`);
             if (!res.ok) return;
             const data = await res.json();
             const list = Array.isArray(data) ? data : (data.logs || []);
 
-            // Pinapanatili ang mga local messages para hindi mawala tuwing nagpo-poll
+            // PERMANENT FIX: Huwag buburahin ang mga nakaimbak na chat messages sa screen
             setLogs(prev => {
                 const updatedList = list.map(newLog => {
                     const prevLog = prev.find(p => idOf(p) === idOf(newLog));
@@ -714,12 +715,15 @@ export default function StudentDashboard({ studentName: studentNameProp = 'Stude
                         </div>
                         <span className={`chip ${S.needsReply.length ? 'warn' : 'ok'}`}>{S.needsReply.length ? `${S.needsReply.length} NEEDS REPLY` : 'ALL CAUGHT UP'}</span>
                     </div>
-                    {logs.filter(l => l.messages?.length).length === 0 ? (
-                        <div className="card empty"><MessageSquare size={30} /><p>Wala ka pang usapan kasama ang Supervisor.</p>
-                            <button className="btn" onClick={() => setTab('logs')}>Pumunta sa My DTR Logs</button></div>
+                    {logs.filter(l => Array.isArray(l.messages) && l.messages.length > 0).length === 0 ? (
+                        <div className="card empty">
+                            <MessageSquare size={30} />
+                            <p>Wala ka pang usapan kasama ang Supervisor.</p>
+                            <button className="btn" onClick={() => setTab('logs')}>Pumunta sa My DTR Logs</button>
+                        </div>
                     ) : (
                         <div className="gt">
-                            {[...logs].filter(l => l.messages?.length)
+                            {[...logs].filter(l => Array.isArray(l.messages) && l.messages.length > 0)
                                 .sort((a, b) => (S.needsReply.includes(b) ? 1 : 0) - (S.needsReply.includes(a) ? 1 : 0))
                                 .map(l => {
                                     const last = l.messages[l.messages.length - 1];
@@ -732,8 +736,12 @@ export default function StudentDashboard({ studentName: studentNameProp = 'Stude
                                             <div><b>Accomplishment:</b> {l.accomplishment || l.raw_notes}</div>
                                             <div className="pv">{waiting ? 'Supervisor' : 'You'}: {msgText(last)}</div>
                                             <div style={{ display: 'flex', gap: 8 }}>
-                                                <button className="btn solid" style={{ flex: 1, justifyContent: 'center' }} onClick={() => setActiveChatId(idOf(l))}><MessageSquare size={13} /> Open thread</button>
-                                                <span className="chip" style={{ alignSelf: 'center', color: '#94a3b8', borderColor: 'rgba(255,255,255,.2)' }}>{l.messages.length} msgs</span>
+                                                <button className="btn solid" style={{ flex: 1, justifyContent: 'center' }} onClick={() => setActiveChatId(idOf(l))}>
+                                                    <MessageSquare size={13} /> Open thread
+                                                </button>
+                                                <span className="chip" style={{ alignSelf: 'center', color: '#94a3b8', borderColor: 'rgba(255,255,255,.2)' }}>
+                                                    {l.messages.length} msgs
+                                                </span>
                                             </div>
                                         </div>
                                     );
