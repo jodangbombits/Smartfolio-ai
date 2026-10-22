@@ -518,18 +518,21 @@ async def get_dtr_logs(user_id: int):
             log_id = log.get("id")
             if log_id:
                 try:
-                    remarks_res = supabase.table("dtr_remarks").select("*").eq("dtr_id", log_id).order("id", desc=False).execute()
-                    formatted_msgs = []
-                    for r in remarks_res.data or []:
-                        formatted_msgs.append({
-                            "id": r.get("id"),
-                            "sender": (r.get("sender_role") or r.get("sender_name") or "supervisor").lower(),
-                            "message": str(r.get("message", "")).replace("REJECTED:", "").strip(),
-                            "timestamp": str(r.get("created_at") or "")[:16].replace("T", " ")
-                        })
-                    log["messages"] = formatted_msgs
-                except Exception as r_err:
-                    print("Error fetching chat messages:", str(r_err))
+    # Dapat nakapaloob sa 'remarks_res' ang result:
+    remarks_res = supabase.table("dtr_remarks").select("*").eq("dtr_id", log_id).order("id", desc=False).execute()
+    formatted_msgs = []
+    for r in (remarks_res.data if remarks_res and remarks_res.data else []):
+        sender_role = str(r.get("sender_role") or r.get("sender_name") or "student").lower()
+        formatted_msgs.append({
+            "id": r.get("id"),
+            "sender": sender_role,
+            "sender_role": sender_role,
+            "message": str(r.get("message", "")).replace("REJECTED:", "").strip(),
+            "timestamp": str(r.get("created_at") or "")[:16].replace("T", " ")
+        })
+    log["messages"] = formatted_msgs
+except Exception as r_err:
+    print("Error fetching remarks for supervisor view:", str(r_err))
 
         return logs
     except Exception as e:
