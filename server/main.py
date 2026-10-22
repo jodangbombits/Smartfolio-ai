@@ -482,26 +482,22 @@ async def get_all_dtr_logs(user_id: Optional[int] = None):
         # Isama ang messages mula sa dtr_remarks para sa bawat DTR log ng Supervisor View
         for log in logs:
             log_id = log.get("id")
-            if log_id:
-                try:
-                    supabase.table("dtr_remarks").select("*").eq("dtr_id", log_id).order("id", desc=False).execute()
-                    formatted_msgs = []
-                    for r in remarks_res.data or []:
-                        sender_role = str(r.get("sender_role") or r.get("sender_name") or "student").lower()
-                        formatted_msgs.append({
-                            "id": r.get("id"),
-                            "sender": sender_role,
-                            "sender_role": sender_role,
-                            "message": str(r.get("message", "")).replace("REJECTED:", "").strip(),
-                            "timestamp": str(r.get("created_at") or "")[:16].replace("T", " ")
-                        })
-                    log["messages"] = formatted_msgs
-                except Exception as r_err:
-                    print("Error fetching remarks for supervisor view:", str(r_err))
-
-        return logs
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+           if log_id:
+            try:
+                remarks_res = supabase.table("dtr_remarks").select("*").eq("dtr_id", log_id).order("id", desc=False).execute()
+                formatted_msgs = []
+                for r in (remarks_res.data if remarks_res and remarks_res.data else []):
+                    sender_role = str(r.get("sender_role") or r.get("sender_name") or "student").lower()
+                    formatted_msgs.append({
+                        "id": r.get("id"),
+                        "sender": sender_role,
+                        "sender_role": sender_role,
+                        "message": str(r.get("message", "")).replace("REJECTED:", "").strip(),
+                        "timestamp": str(r.get("created_at") or "")[:16].replace("T", " ")
+                    })
+                log["messages"] = formatted_msgs
+            except Exception as r_err:
+                print("Error fetching remarks for supervisor view:", str(r_err))
 
 
 @app.get("/api/dtr/{user_id}")
@@ -517,7 +513,7 @@ async def get_dtr_logs(user_id: int):
         for log in logs:
             log_id = log.get("id")
             if log_id:
-                try:
+     try:
     # Dapat nakapaloob sa 'remarks_res' ang result:
     remarks_res = supabase.table("dtr_remarks").select("*").eq("dtr_id", log_id).order("id", desc=False).execute()
     formatted_msgs = []
