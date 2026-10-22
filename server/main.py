@@ -484,7 +484,7 @@ async def get_all_dtr_logs(user_id: Optional[int] = None):
             log_id = log.get("id")
             if log_id:
                 try:
-                    remarks_res = supabase.table("dtr_remarks").select("*").eq("dtr_id", log_id).order("id", desc=False).execute()
+                    supabase.table("dtr_remarks").select("*").eq("dtr_id", log_id).order("id", desc=False).execute()
                     formatted_msgs = []
                     for r in remarks_res.data or []:
                         sender_role = str(r.get("sender_role") or r.get("sender_name") or "student").lower()
@@ -518,7 +518,7 @@ async def get_dtr_logs(user_id: int):
             log_id = log.get("id")
             if log_id:
                 try:
-                    remarks_res = supabase.table("dtr_remarks").select("*").eq("dtr_id", log_id).order("id", asc=False).execute()
+                    remarks_res = supabase.table("dtr_remarks").select("*").eq("dtr_id", log_id).order("id", desc=False).execute()
                     formatted_msgs = []
                     for r in remarks_res.data or []:
                         formatted_msgs.append({
