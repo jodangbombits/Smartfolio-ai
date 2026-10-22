@@ -383,7 +383,6 @@ async def get_all_users():
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-
 # =====================================================================
 # UPLOAD ENDPOINT (proof ng student + MOA file ng supervisor)
 # =====================================================================
