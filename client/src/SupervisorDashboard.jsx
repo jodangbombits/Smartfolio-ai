@@ -17,11 +17,23 @@ const dateOf = (l) => l.log_date || l.date || '';
 const msgText = (m) => typeof m === 'string' ? m : (m.message || m.text || m.remark || m.content || '');
 const fullUrl = (u) => !u ? null : /^https?:\/\//i.test(u) ? u : `${API}${u.startsWith('/') ? '' : '/'}${u}`;
 
-const cleanId = (id) => {
-    if (!id) return '';
-    return String(id).split(':')[0].replace(/[^0-9]/g, '');
-};
+const isAll = cleanId(selectedId) === 'all';
 
+const scopeLogs = useMemo(() => {
+    if (isAll) return logs;
+    return logs.filter(l => {
+        // Bina-browse ang posibleng ID keys mula sa backend DTR log object
+        const logUserId = cleanId(l.user_id || l.userId || l.student_id || l.studentId);
+        const targetId = cleanId(selectedId);
+        return logUserId === targetId;
+    });
+}, [logs, selectedId, isAll]);
+
+const threads = useMemo(() => {
+    return scopeLogs
+        .filter(l => Array.isArray(l.messages) && l.messages.length > 0)
+        .sort((a, b) => (needsReply(b) ? 1 : 0) - (needsReply(a) ? 1 : 0));
+}, [scopeLogs]);
 const isSup = (m) => {
     if (!m) return false;
     const role = String(m.sender_role || m.sender_name || m.sender || '').toLowerCase();
