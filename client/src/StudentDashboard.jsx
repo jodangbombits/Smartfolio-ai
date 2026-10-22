@@ -705,7 +705,6 @@ export default function StudentDashboard({ studentName: studentNameProp = 'Stude
                         {renderTable(visibleLogs)}
                     </div>
                 )}
-
                 {/* ───── MESSAGES ───── */}
                 {tab === 'messages' && (<>
                     <div className="card" style={{ marginBottom: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
@@ -713,8 +712,11 @@ export default function StudentDashboard({ studentName: studentNameProp = 'Stude
                             <div className="sh" style={{ marginBottom: 4 }}><MessageSquare size={16} /> Active supervisor threads</div>
                             <div style={{ color: '#64748b' }}>Nauuna ang mga thread na naghihintay ng reply mo.</div>
                         </div>
-                        <span className={`chip ${S.needsReply.length ? 'warn' : 'ok'}`}>{S.needsReply.length ? `${S.needsReply.length} NEEDS REPLY` : 'ALL CAUGHT UP'}</span>
+                        <span className={`chip ${S.needsReply.length ? 'warn' : 'ok'}`}>
+                            {S.needsReply.length ? `${S.needsReply.length} NEEDS REPLY` : 'ALL CAUGHT UP'}
+                        </span>
                     </div>
+
                     {logs.filter(l => Array.isArray(l.messages) && l.messages.length > 0).length === 0 ? (
                         <div className="card empty">
                             <MessageSquare size={30} />
@@ -728,14 +730,34 @@ export default function StudentDashboard({ studentName: studentNameProp = 'Stude
                                 .map(l => {
                                     const last = l.messages[l.messages.length - 1];
                                     const waiting = !isStudentMsg(last);
+                                    const st = statusOf(l);
+
                                     return (
-                                        <div key={idOf(l)} className={`card th ${waiting ? 'new' : ''}`}>
+                                        <div key={idOf(l)} className={`card th ${waiting ? 'new' : ''}`} style={{ border: waiting ? '1px solid #facc15' : undefined }}>
                                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                                <span style={{ color: '#a78bfa' }}>DTR: {dateOf(l)}</span>{chip(l)}
+                                                <span style={{ fontSize: 10.5, fontWeight: 700, color: '#a78bfa', textTransform: 'uppercase' }}>
+                                                    SUPERVISOR
+                                                </span>
+                                                <span className={`chip ${st === 'approved' ? 'ok' : st === 'rejected' ? 'bad' : 'warn'}`}>
+                                                    {st.toUpperCase()}
+                                                </span>
                                             </div>
-                                            <div><b>Accomplishment:</b> {l.accomplishment || l.raw_notes}</div>
-                                            <div className="pv">{waiting ? 'Supervisor' : 'You'}: {msgText(last)}</div>
-                                            <div style={{ display: 'flex', gap: 8 }}>
+
+                                            <div style={{ fontSize: 11, color: '#38bdf8', fontWeight: 700 }}>
+                                                DTR: {dateOf(l)}
+                                            </div>
+
+                                            <div style={{ fontSize: 11, color: '#e2e8f0' }}>
+                                                <b>Accomplishment:</b> {l.accomplishment || l.raw_notes}
+                                            </div>
+
+                                            <div className="pv" style={{ background: 'rgba(5,8,22,.8)', padding: '8px 10px', borderRadius: 8, border: '1px solid rgba(255,255,255,.08)', fontSize: 11 }}>
+                                                <b style={{ color: waiting ? '#f87171' : '#38bdf8' }}>
+                                                    {waiting ? 'Supervisor' : 'You'}:
+                                                </b> {msgText(last)}
+                                            </div>
+
+                                            <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
                                                 <button className="btn solid" style={{ flex: 1, justifyContent: 'center' }} onClick={() => setActiveChatId(idOf(l))}>
                                                     <MessageSquare size={13} /> Open thread
                                                 </button>
