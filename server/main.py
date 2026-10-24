@@ -477,10 +477,18 @@ async def get_all_dtr_logs(user_id: Optional[int] = None):
             query = query.eq("user_id", user_id)
 
         res = query.execute()
-        logs = res.data or []
+        raw_logs = res.data or []
+        logs = []
         
-        # Isama ang messages mula sa dtr_remarks para sa bawat DTR log ng Supervisor View
-        for log in logs:
+        for log in raw_logs:
+            # Kunin ang name mula sa joined users object
+            user_obj = log.get("users") or {}
+            full_name = user_obj.get("full_name") if isinstance(user_obj, dict) else None
+            
+            # Dagdagan ng intern_name at full_name key sa outer level
+            log["intern_name"] = full_name or "Student"
+            log["full_name"] = full_name or "Student"
+            
             log_id = log.get("id")
             if log_id:
                 try:
@@ -498,6 +506,11 @@ async def get_all_dtr_logs(user_id: Optional[int] = None):
                     log["messages"] = formatted_msgs
                 except Exception as r_err:
                     print("Error fetching remarks for supervisor view:", str(r_err))
+            logs.append(log)
+
+        return logs
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
         return logs
     except Exception as e:
